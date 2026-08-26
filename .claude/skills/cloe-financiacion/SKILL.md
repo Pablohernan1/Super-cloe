@@ -121,12 +121,80 @@ Marcar cada fase como hecha en este mismo archivo a medida que se completa
       (sección 12 del spec) — hoy solo se editan por SQL/dashboard de Supabase,
       no hay UI. "Topes por perfil" (monto máximo que cajero/supervisor puede
       simular/aprobar) no se implementó — el resto de los topes del spec 12 sí.
-- [ ] **Fase 5 — Migración a Electron.** Envolver/adaptar la UI existente
-      (probablemente convertir de Server Components de Next.js a un SPA React
-      que consuma Supabase-js directo) en un shell Electron. Hacer esto
-      *después* de que las fases 1-4 estén validadas contra la app Next.js
-      actual, para no depurar lógica de negocio y migración de runtime al
-      mismo tiempo.
+- [~] **Fase 5 — Migración a Electron.** Carpeta nueva `desktop/` (Vite +
+      React + react-router + Electron + electron-builder), **no** dentro de
+      `app/` de Next.js — son dos proyectos npm separados con su propio
+      `package.json`. Ya portados y verificados (`tsc -b` sin errores,
+      `npm run build` de Vite genera `dist/` correctamente):
+      login, dashboard, clientes (list/detail/nuevo/editar/form),
+      garantes (list/nuevo), créditos (list/detail/nuevo/acciones
+      aprobar-rechazar), préstamos (list/detail/simulación con creación vía
+      RPC `create_loan`), cobranza, alertas. Todas las llamadas a
+      `/api/*` de Next.js se reemplazaron por `supabase-js` directo
+      (`.from()...` o `.rpc(...)`) — no hay capa de API intermedia, tal como
+      exige la decisión de arquitectura #3.
+      - `desktop/src/lib/supabase.ts`: cliente browser con sesión en
+        localStorage (sin cookies, sin middleware -- el guard de rutas es
+        `desktop/src/components/layout/protected-route.tsx`).
+      - `desktop/electron/main.cjs` + `preload.cjs`: shell Electron mínimo,
+        cargan `dist/index.html` en producción o el dev server de Vite
+        (`ELECTRON_START_URL`) en desarrollo. `HashRouter` (no
+        `BrowserRouter`) porque Electron sirve desde `file://`.
+      - `desktop/.env` tiene `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`
+        (gitignored) -- mismas credenciales que `.env.local` de la raíz.
+      - Se podaron de `components/ui/` los componentes no usados que no
+        compilaban sin instalar sus dependencias (calendar, carousel, chart,
+        toast/toaster/use-toast viejo, form, input-otp, resizable, sidebar) --
+        si hace falta alguno más adelante, copiarlo de nuevo desde
+        `components/ui/` en la raíz e instalar su dependencia.
+      - **BLOQUEADO, no por código: no se pudo descargar el binario de
+        Electron en esta sesión.** Ver sección "Bloqueo de red" más abajo.
+        Todo lo demás (scaffold, código, type-check, build de Vite) está
+        listo — falta únicamente correr `npm install` dentro de `desktop/`
+        desde una red sin la inspección SSL que describe esa sección para
+        que se complete la descarga del binario, y después
+        `npm run electron:dev` ya funciona (incluso en esta red, una vez
+        cacheado el binario localmente).
+
+## Bloqueo de red: descarga del binario de Electron (2026-08-26)
+
+`npm install` dentro de `desktop/` instala todas las dependencias JS sin
+problema (usan `registry.npmjs.org`, que esta red permite), pero el
+postinstall de `electron` descarga un binario nativo desde
+`objects.githubusercontent.com`, y ahí falla con
+`unable to verify the first certificate`. Diagnóstico confirmado con
+`openssl s_client`: hay un **firewall Fortinet haciendo inspección SSL**
+(`issuer=... O=Fortinet ... CN=FGT80FTK21045050`) en esta red/máquina, y su
+CA no está instalada en ningún almacén de certificados de Windows
+(`Cert:\*\Root`, revisado con PowerShell) — ni siquiera Windows lo
+confía, y encima genera un certificado autofirmado *distinto e
+inconsistente* por conexión (capturé uno para
+`objects.githubusercontent.com` con CN `*.github.io`, que probé
+manualmente con `curl --cacert` y funcionó una vez, pero `npm install`
+vuelve a fallar porque cada intento nuevo negocia un certificado distinto
+que no coincide). No es un problema de código ni de configuración del
+proyecto — es la política de red de esta máquina/red específica.
+
+**Cómo destrabarlo (para la próxima sesión o para el usuario):**
+1. Más simple: correr `npm install` dentro de `desktop/` desde otra red sin
+   esa inspección SSL (wifi de casa, datos móviles). Es un paso único --
+   una vez que el binario de Electron queda cacheado en
+   `desktop/node_modules/electron`, `npm run electron:dev` funciona
+   después incluso en esta red (solo necesita salir a Supabase, no a
+   GitHub).
+2. Si hay que hacerlo en esta red sí o sí: pedirle a IT que permita
+   `objects.githubusercontent.com` y `github.com` sin inspección SSL (o que
+   instale la CA del Fortinet en el almacén de certificados de Windows para
+   que Node la herede vía `--use-system-ca`).
+3. Si nada de eso es posible: bajar el zip de Electron manualmes desde un
+   navegador (que sí suele tener la CA correcta instalada) y colocarlo donde
+   `@electron/get` lo busca en caché
+   (`%LOCALAPPDATA%\electron\Cache`), o usar `ELECTRON_MIRROR` apuntando a
+   un mirror ya confiable en esta red.
+No perder tiempo re-intentando `npm install electron` en esta misma red sin
+resolver el certificado primero — ya se probó varias veces con distintas
+variantes (`--use-system-ca`, `NODE_EXTRA_CA_CERTS` con el cert capturado)
+y el resultado es el mismo.
 
 ## Cómo verificar qué falta (antes de asumir y repetir trabajo)
 
