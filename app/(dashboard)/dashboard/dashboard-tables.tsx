@@ -6,11 +6,11 @@ import { CurrencyDisplay } from '@/components/ui/currency-display'
 import type { Loan } from '@/lib/types'
 
 type LoanWithCustomer = Loan & { 
-  customer?: { 
+  customer?: {
     first_name: string
     last_name: string
-    customer_code: string 
-  } 
+    customer_code: string | null
+  }
 }
 
 type OverdueInstallment = {

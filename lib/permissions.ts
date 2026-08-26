@@ -19,11 +19,14 @@ export const PERMISSIONS = {
     approve: true,
     manage_users: false,
   },
-  // Cajero - solo lectura
+  // Cajero: busca/da de alta clientes y garantes, simula préstamos, registra
+  // pagos (spec sección 4). No aprueba límites ni confirma préstamos -- esas
+  // acciones se restringen aparte, con checks explícitos de rol, no con este
+  // flag genérico.
   cajero: {
-    create: false,
+    create: true,
     read: true,
-    update: false,
+    update: true,
     delete: false,
     approve: false,
     manage_users: false,

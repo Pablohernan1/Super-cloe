@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Customer, CreditLimit } from '@/lib/types'
+import { getMaxInstallments } from './interest-rates'
 
 export interface LoanValidationResult {
   isValid: boolean
@@ -39,8 +40,8 @@ export async function validateLoanEligibility(
     }
 
     // 2. Check if customer is active
-    if (!customer.is_active) {
-      errors.push('Cliente inactivo')
+    if (customer.status !== 'active') {
+      errors.push(`Cliente no habilitado para operar (estado: ${customer.status})`)
     }
 
     // 3. Fetch credit limit
@@ -83,8 +84,9 @@ export async function validateLoanEligibility(
       errors.push('Monto debe ser mayor a 0')
     }
 
-    if (termMonths < 1 || termMonths > 60) {
-      errors.push('Plazo debe estar entre 1 y 60 meses')
+    const maxInstallments = await getMaxInstallments()
+    if (termMonths < 1 || termMonths > maxInstallments) {
+      errors.push(`Cantidad de cuotas debe estar entre 1 y ${maxInstallments}`)
     }
 
     // 9. Fetch active guarantors

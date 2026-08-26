@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     // Log audit
-    await createAuditLog('create', 'guarantor_relations', newRelation.id, {
+    await createAuditLog('create', 'guarantor_relations', newRelation.id, null, {
       titular_customer_id: titular_id,
       guarantor_customer_id: guarantor_id,
     })
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     }
 
     // Log audit
-    await createAuditLog('update', 'guarantor_relations', relation_id, {
+    await createAuditLog('update', 'guarantor_relations', relation_id, null, {
       status: newStatus,
     })
 

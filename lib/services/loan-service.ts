@@ -1,106 +1,59 @@
 import { createClient } from '@/lib/supabase/server'
-import type { Loan, Installment } from '@/lib/types'
-import { calculateInstallments } from './interest-rates'
+import type { Loan } from '@/lib/types'
 import { createAuditLog } from '@/lib/audit-logger'
 
 /**
- * Create a new loan in the system
+ * Create a new loan atomically via the `create_loan` Postgres function.
+ * Todas las validaciones críticas (cliente activo, garantes válidos,
+ * disponible, topes) se revalidan ahí mismo -- ver
+ * scripts/007_consolidated_schema.sql. Los garantes son los que el titular
+ * ya tiene activos en guarantor_relations (spec: se asocian antes, en la
+ * pantalla de garantes, no se eligen al momento del préstamo).
  */
 export async function createLoan(
   customerId: string,
   principalAmount: number,
-  interestRate: number,
   termMonths: number,
   purpose?: string
-): Promise<{ loan: Loan; installments: Installment[] } | null> {
+): Promise<{ success: boolean; loan?: any; installments?: any[]; error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    console.error('[v0] No authenticated user')
-    return null
+    return { success: false, error: 'No hay usuario autenticado' }
   }
 
-  try {
-    // Calculate total amount
-    const totalAmount = principalAmount + principalAmount * interestRate
-    const installmentAmount = totalAmount / termMonths
+  const { data: guarantorRelations, error: guarantorsError } = await supabase
+    .from('guarantor_relations')
+    .select('guarantor_customer_id, customer:guarantor_customer_id(status)')
+    .eq('titular_customer_id', customerId)
+    .eq('status', 'active')
 
-    // Generate loan number
-    const loanNumber = `PRS-${Date.now()}`
+  if (guarantorsError) {
+    return { success: false, error: guarantorsError.message }
+  }
 
-    // Create loan
-    const { data: loanData, error: loanError } = await supabase
-      .from('loans')
-      .insert({
-        loan_number: loanNumber,
-        customer_id: customerId,
-        principal_amount: principalAmount,
-        interest_rate: interestRate,
-        total_amount: totalAmount,
-        term_months: termMonths,
-        installment_amount: installmentAmount,
-        status: 'pending',
-        purpose,
-        created_by: user.id,
-      })
-      .select()
-      .single()
+  const guarantorIds = (guarantorRelations || [])
+    .filter((g: any) => g.customer?.status === 'active')
+    .map((g) => g.guarantor_customer_id)
 
-    if (loanError || !loanData) {
-      console.error('[v0] Error creating loan:', loanError)
-      return null
-    }
+  const { data, error } = await supabase.rpc('create_loan', {
+    p_customer_id: customerId,
+    p_principal_amount: principalAmount,
+    p_term_months: termMonths,
+    p_guarantor_ids: guarantorIds,
+    p_purpose: purpose || null,
+  })
 
-    console.log('[v0] Loan created:', loanData.id)
+  if (error) {
+    console.error('[v0] Error creating loan:', error)
+    return { success: false, error: error.message }
+  }
 
-    // Create installments
-    const firstDueDate = new Date()
-    firstDueDate.setMonth(firstDueDate.getMonth() + 1)
-
-    const installmentDetails = calculateInstallments(
-      principalAmount,
-      totalAmount,
-      termMonths,
-      firstDueDate
-    )
-
-    const { data: installmentsData, error: installmentsError } = await supabase
-      .from('installments')
-      .insert(
-        installmentDetails.map((inst) => ({
-          ...inst,
-          loan_id: loanData.id,
-          status: 'pending',
-        }))
-      )
-      .select()
-
-    if (installmentsError) {
-      console.error('[v0] Error creating installments:', installmentsError)
-      // TODO: Rollback loan creation
-      return null
-    }
-
-    console.log('[v0] Installments created:', installmentsData?.length)
-
-    // Log audit
-    await createAuditLog('create', 'loans', loanData.id, null, {
-      customer_id: customerId,
-      principal_amount: principalAmount,
-      interest_rate: interestRate,
-      term_months: termMonths,
-      total_amount: totalAmount,
-      status: 'pending',
-    })
-
-    return {
-      loan: loanData,
-      installments: installmentsData || [],
-    }
-  } catch (error) {
-    console.error('[v0] Error in createLoan:', error)
-    return null
+  return {
+    success: true,
+    loan: data.loan,
+    installments: data.installments,
   }
 }
 
@@ -178,7 +131,11 @@ export async function getLoanWithDetails(loanId: string) {
         first_name,
         last_name,
         document_number,
-        is_active
+        status
+      ),
+      loan_guarantors (
+        guarantor_customer_id,
+        guarantor:guarantor_customer_id (id, first_name, last_name, customer_code)
       ),
       installments (
         id,
@@ -255,84 +212,6 @@ export async function listLoans(
   return {
     loans: data || [],
     total: count || 0,
-  }
-}
-
-/**
- * Approve loan and update credit limit commitment
- */
-export async function approveLoan(loanId: string, approvedBy: string): Promise<Loan | null> {
-  const supabase = await createClient()
-
-  try {
-    // Fetch loan details
-    const { data: loan } = await supabase
-      .from('loans')
-      .select('id, customer_id, total_amount, status')
-      .eq('id', loanId)
-      .single()
-
-    if (!loan || loan.status !== 'pending') {
-      console.error('[v0] Loan not in pending status')
-      return null
-    }
-
-    // Update loan status to approved
-    const { data: updatedLoan, error: loanError } = await supabase
-      .from('loans')
-      .update({
-        status: 'approved',
-        approved_by: approvedBy,
-        approved_at: new Date().toISOString(),
-        updated_by: approvedBy,
-      })
-      .eq('id', loanId)
-      .select()
-      .single()
-
-    if (loanError) {
-      console.error('[v0] Error approving loan:', loanError)
-      return null
-    }
-
-    // Update credit limit - increase committed_limit
-    const { data: creditLimit } = await supabase
-      .from('credit_limits')
-      .select('id, approved_limit, committed_limit, available_credit')
-      .eq('customer_id', loan.customer_id)
-      .single()
-
-    if (creditLimit) {
-      const newCommitted = (creditLimit.committed_limit || 0) + loan.total_amount
-      const newAvailable = creditLimit.approved_limit - newCommitted
-
-      const { error: updateError } = await supabase
-        .from('credit_limits')
-        .update({
-          committed_limit: newCommitted,
-          available_credit: Math.max(0, newAvailable),
-          updated_by: approvedBy,
-        })
-        .eq('id', creditLimit.id)
-
-      if (updateError) {
-        console.error('[v0] Error updating credit limit:', updateError)
-      } else {
-        console.log('[v0] Credit limit updated:', { newCommitted, newAvailable })
-      }
-    }
-
-    // Log audit
-    await createAuditLog('approve', 'loans', loanId, null, {
-      status: 'approved',
-      approved_at: new Date().toISOString(),
-      approved_by: approvedBy,
-    })
-
-    return updatedLoan
-  } catch (error) {
-    console.error('[v0] Error in approveLoan:', error)
-    return null
   }
 }
 

@@ -1,11 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 
-export interface InterestRate {
-  termMonths: number
-  monthlyRate: number
-  totalRate: number
-}
-
 export interface LoanCalculation {
   principalAmount: number
   monthlyRate: number
@@ -15,93 +9,74 @@ export interface LoanCalculation {
   interestAccumulated: number[]
 }
 
-/**
- * Predefined interest rates by term
- * This is a simple implementation. Future: can be replaced with table from database
- */
-const DEFAULT_RATES: Record<number, number> = {
-  1: 0.025, // 2.5% for 1 month
-  2: 0.045, // 4.5% for 2 months
-  3: 0.065, // 6.5% for 3 months
-  6: 0.09, // 9% for 6 months
-  12: 0.12, // 12% for 12 months
-  24: 0.14, // 14% for 24 months
-  36: 0.15, // 15% for 36 months
+const RATE_PARAM_BY_TERM: Record<number, string> = {
+  1: 'interest_rate_1_installment',
+  2: 'interest_rate_2_installments',
+  3: 'interest_rate_3_installments',
 }
 
-/**
- * Get interest rate for a given term
- * Uses linear interpolation for non-standard terms
- */
-export async function getInterestRate(termMonths: number): Promise<number> {
-  // Try to get from database first (future feature)
+const DEFAULT_RATES: Record<number, number> = {
+  1: 0.15,
+  2: 0.25,
+  3: 0.30,
+}
+
+async function getParameterNumeric(key: string, fallback: number): Promise<number> {
   const supabase = await createClient()
 
-  try {
-    const { data: parameter } = await supabase
-      .from('parameters')
-      .select('value')
-      .eq('key', `INTEREST_RATE_${termMonths}M`)
-      .eq('is_active', true)
-      .single()
+  const { data } = await supabase
+    .from('parameters')
+    .select('value')
+    .eq('key', key)
+    .eq('is_active', true)
+    .single()
 
-    if (parameter) {
-      return parseFloat(parameter.value)
-    }
-  } catch (error) {
-    console.log('[v0] Interest rate not found in parameters, using defaults')
+  if (data?.value) {
+    const parsed = parseFloat(data.value)
+    if (!Number.isNaN(parsed)) return parsed
   }
 
-  // Fall back to defaults
-  if (DEFAULT_RATES[termMonths]) {
-    return DEFAULT_RATES[termMonths]
-  }
-
-  // Linear interpolation for non-standard terms
-  const sortedTerms = Object.keys(DEFAULT_RATES)
-    .map(Number)
-    .sort((a, b) => a - b)
-
-  let lowerTerm = sortedTerms[0]
-  let upperTerm = sortedTerms[sortedTerms.length - 1]
-
-  for (let i = 0; i < sortedTerms.length - 1; i++) {
-    if (sortedTerms[i] <= termMonths && termMonths <= sortedTerms[i + 1]) {
-      lowerTerm = sortedTerms[i]
-      upperTerm = sortedTerms[i + 1]
-      break
-    }
-  }
-
-  const lowerRate = DEFAULT_RATES[lowerTerm]
-  const upperRate = DEFAULT_RATES[upperTerm]
-  const ratio = (termMonths - lowerTerm) / (upperTerm - lowerTerm)
-
-  return lowerRate + ratio * (upperRate - lowerRate)
+  return fallback
 }
 
 /**
- * Calculate loan payments with interest
- * Uses simple interest formula for now
+ * Tasa directa según spec 8.4/9: 1 cuota 15%, 2 cuotas 25%, 3 cuotas 30%,
+ * parametrizable desde la tabla `parameters`. Sin interpolación: el plazo
+ * máximo lo define el parámetro `max_installments`.
+ */
+export async function getInterestRate(termMonths: number): Promise<number> {
+  const paramKey = RATE_PARAM_BY_TERM[termMonths]
+
+  if (!paramKey) {
+    // Fuera de 1-3 cuotas: usar la tasa del máximo plazo soportado
+    return getParameterNumeric('interest_rate_3_installments', DEFAULT_RATES[3])
+  }
+
+  return getParameterNumeric(paramKey, DEFAULT_RATES[termMonths])
+}
+
+export async function getMaxInstallments(): Promise<number> {
+  return getParameterNumeric('max_installments', 3)
+}
+
+/**
+ * Calcula interés total, total a cobrar y valor de cuota con tasa directa
+ * simple (spec 9): interés total = capital × tasa; total a cobrar = capital
+ * + interés total; valor cuota = total a cobrar / cantidad de cuotas.
  */
 export async function calculateLoanPayment(
   principalAmount: number,
   termMonths: number
 ): Promise<LoanCalculation> {
   const monthlyRate = await getInterestRate(termMonths)
-  const totalRate = monthlyRate
-  const totalInterest = principalAmount * totalRate
-  const totalAmount = principalAmount + totalInterest
-  const monthlyPayment = totalAmount / termMonths
+  const totalInterest = Math.round(principalAmount * monthlyRate * 100) / 100
+  const totalAmount = Math.round((principalAmount + totalInterest) * 100) / 100
+  const monthlyPayment = Math.round((totalAmount / termMonths) * 100) / 100
 
-  // Calculate interest accumulated per month (for installments)
   const interestAccumulated: number[] = []
-  let accumulated = 0
-
+  const interestPerInstallment = Math.round((totalInterest / termMonths) * 100) / 100
   for (let i = 0; i < termMonths; i++) {
-    const monthlyInterest = totalInterest / termMonths
-    accumulated += monthlyInterest
-    interestAccumulated.push(monthlyInterest)
+    interestAccumulated.push(interestPerInstallment)
   }
 
   return {
@@ -115,7 +90,9 @@ export async function calculateLoanPayment(
 }
 
 /**
- * Calculate all installment details
+ * Calendario de cuotas para vista previa (simulación). La creación real del
+ * préstamo recalcula esto mismo dentro de la función Postgres `create_loan`,
+ * que es la fuente de verdad -- esto es solo para mostrarlo antes de confirmar.
  */
 export function calculateInstallments(
   principalAmount: number,
@@ -123,9 +100,9 @@ export function calculateInstallments(
   termMonths: number,
   firstDueDate: Date
 ) {
-  const interestTotal = totalAmount - principalAmount
-  const interestPerMonth = interestTotal / termMonths
-  const principalPerMonth = principalAmount / termMonths
+  const installmentBase = Math.round((totalAmount / termMonths) * 100) / 100
+  const remainder = Math.round((totalAmount - installmentBase * termMonths) * 100) / 100
+  const principalPerInstallment = Math.round((principalAmount / termMonths) * 100) / 100
 
   const installments = []
 
@@ -133,12 +110,14 @@ export function calculateInstallments(
     const dueDate = new Date(firstDueDate)
     dueDate.setMonth(dueDate.getMonth() + i - 1)
 
+    const totalForInstallment = i === termMonths ? installmentBase + remainder : installmentBase
+
     installments.push({
       installment_number: i,
       due_date: dueDate.toISOString().split('T')[0],
-      principal_amount: principalPerMonth,
-      interest_amount: interestPerMonth,
-      total_amount: principalPerMonth + interestPerMonth,
+      principal_amount: principalPerInstallment,
+      interest_amount: Math.round((totalForInstallment - principalPerInstallment) * 100) / 100,
+      total_amount: totalForInstallment,
     })
   }
 

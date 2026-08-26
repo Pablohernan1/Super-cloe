@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { updateLoanStatus, getLoanWithDetails, approveLoan } from '@/lib/services/loan-service'
-import { createAuditLog } from '@/lib/audit-logger'
+import { updateLoanStatus, getLoanWithDetails } from '@/lib/services/loan-service'
 
 export async function GET(
   request: Request,
@@ -62,14 +61,15 @@ export async function PATCH(
 
     let updatedLoan = null
 
-    if (action === 'approve') {
-      // Approve and update credit limit
-      updatedLoan = await approveLoan(id, user.id)
+    // Los préstamos se crean directamente 'active' vía create_loan (spec:
+    // supervisor confirma en un solo paso). Acá solo se admite cancelar o
+    // rechazar un préstamo existente; libera el crédito comprometido
+    // automáticamente (trigger release_credit_on_loan_close).
+    if (action === 'cancel') {
+      updatedLoan = await updateLoanStatus(id, 'cancelled', user.id, rejection_reason)
     } else if (action === 'reject') {
-      // Just reject
       updatedLoan = await updateLoanStatus(id, 'rejected', user.id, rejection_reason)
     } else if (status) {
-      // Generic status update
       updatedLoan = await updateLoanStatus(id, status, user.id, rejection_reason)
     }
 

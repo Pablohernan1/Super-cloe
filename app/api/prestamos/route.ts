@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { validateLoanEligibility } from '@/lib/services/loan-validator'
 import { createLoan } from '@/lib/services/loan-service'
 import { calculateLoanPayment } from '@/lib/services/interest-rates'
-import { createAuditLog } from '@/lib/audit-logger'
 
 export async function POST(request: Request) {
   try {
@@ -52,25 +51,17 @@ export async function POST(request: Request) {
       )
     }
 
-    // Calculate interest
+    // Calculate interest (preview -- create_loan recalcula la fuente de verdad en la DB)
     const calculation = await calculateLoanPayment(principal_amount, term_months)
 
-    // Create loan
-    const result = await createLoan(customer_id, principal_amount, calculation.monthlyRate, term_months, purpose)
+    // Create loan (atómico, con garantes del titular y validaciones críticas en la DB)
+    const result = await createLoan(customer_id, principal_amount, term_months, purpose)
 
-    if (!result) {
-      return Response.json({ error: 'Failed to create loan' }, { status: 500 })
+    if (!result.success) {
+      return Response.json({ error: result.error || 'Failed to create loan' }, { status: 400 })
     }
 
     console.log('[v0] Loan created successfully:', result.loan.id)
-
-    // Audit log
-    await createAuditLog('create', 'loans', result.loan.id, null, {
-      customer_id,
-      principal_amount,
-      term_months,
-      total_amount: result.loan.total_amount,
-    })
 
     return Response.json({
       success: true,

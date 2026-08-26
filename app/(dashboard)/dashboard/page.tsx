@@ -31,7 +31,7 @@ async function getDashboardStats(): Promise<DashboardStats> {
   const { count: totalCustomers } = await supabase
     .from('customers')
     .select('*', { count: 'exact', head: true })
-    .eq('is_active', true)
+    .eq('status', 'active')
 
   // Get active loans
   const { count: activeLoans } = await supabase

@@ -71,38 +71,56 @@ No volver a plantear estas preguntas — están resueltas:
 Marcar cada fase como hecha en este mismo archivo a medida que se completa
 (editar el checklist), para que la próxima sesión no repita trabajo.
 
-- [ ] **Fase 0 — Higiene previa.** Falta `git init` (el repo no tiene control
-      de versiones) y falta `.env.local` con las credenciales de Supabase
-      (URL + service role key) — **pedidas al usuario, pendientes de recibir**.
-      No commitear `.env.local` (ya está en `.gitignore`).
-- [ ] **Fase 1 — Migración de base consolidada.** Una única migración SQL
-      nueva (ej. `scripts/007_consolidated_schema.sql` o reemplazar todo
-      `/scripts` por un solo archivo fuente de verdad) que reconcilie:
-      `credit_limits` (approved_limit/committed_limit/available_credit/status/
-      guarantors_required/guarantors_active_count/eligible_for_extension),
-      tabla `guarantor_relations` (titular_customer_id/guarantor_customer_id/
-      status) con tope de 2 garantes activos por titular reforzado en DB,
-      `customers.status` como único campo de estado (eliminar la ambigüedad
-      con `is_active`, incluir 'active'/'inactive'/'blocked'/'suspended'),
-      `payments.received_at`, `audit_logs` con un solo shape
-      (`table_name`/`record_id`, consistente con `lib/audit-logger.ts`), y
-      agregar lo que falta para mora/bloqueo (días de atraso por cuota,
-      trigger o función que bloquee titular + garantes cuando corresponda) y
-      para parámetros (`parameters` ya existe — sembrar ahí tasas 15/25/30%,
-      días de gracia, pago mínimo de rehabilitación, máximo de préstamos
-      vigentes/garantizados, topes por perfil — spec sección 12).
-- [ ] **Fase 2 — Motor de tasas.** Reescribir `lib/services/interest-rates.ts`
-      (o su equivalente en Postgres) para tasa directa fija 1/2/3 cuotas
-      (15%/25%/30%), parametrizable desde la tabla `parameters`, sin
-      interpolación ni plazos > máximo configurable (default 3).
-- [ ] **Fase 3 — Permisos.** Corregir `lib/permissions.ts` para que el cajero
-      pueda simular préstamo y registrar pago (no solo lectura), preservando
-      que confirmar préstamo / aprobar límites altos quede restringido a
-      supervisor+ (spec sección 4).
-- [ ] **Fase 4 — Módulos faltantes.** Construir Cobranza (registrar pago,
-      aplicar a cuota/interés de mora, pantalla G del PDF), Alertas de mora
-      (pantalla H), y el flujo de rehabilitación (pago mínimo parametrizable,
-      desbloqueo de titular + garantes, auditado).
+- [x] **Fase 0 — Higiene previa.** `git init` hecho, commit inicial creado
+      (156 archivos). `.env.local` creado con `NEXT_PUBLIC_SUPABASE_URL`,
+      `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` —
+      proyecto Supabase ref `kttplwfjyizsfwhxmztc`, conexión verificada
+      (200 OK contra `customers`). `.env.local` confirmado fuera de git.
+- [x] **Fase 1 — Migración de base consolidada.** `scripts/007_consolidated_schema.sql`,
+      aplicada contra la base real (ver "Cómo se aplicó" abajo). `credit_limits`
+      reconciliada (approved_limit/committed_limit/available_credit generada/
+      status/guarantors_required/guarantors_active_count/eligible_for_extension),
+      `guarantor_relations` formalizada con tope de 2 garantes activos por
+      titular y máximo de titulares por garante reforzados con trigger
+      (`enforce_guarantor_limits`), `customers.status` como único campo de
+      estado (`is_active` eliminado, enum `active/inactive/blocked/suspended`),
+      tabla vieja `guarantors` (texto libre) borrada, `loans.guarantor_id`
+      reemplazado por tabla `loan_guarantors` (1 o 2 garantes por préstamo),
+      `payments.received_at` + `applied_penalty`, `audit_logs` con
+      `table_name`/`record_id`. Parámetros de Cloe sembrados (tasas 15/25/30%,
+      `mora_grace_period_days`, `mora_daily_penalty_rate_pct`,
+      `rehabilitation_mode`, máximos de garantes/préstamos, topes de límite
+      sugeridos). Motor de mora/bloqueo/rehabilitación como funciones Postgres
+      `SECURITY DEFINER`: `create_loan` (creación atómica con validaciones
+      críticas server-side), `refresh_mora_and_blocks`, `register_payment`,
+      `rehabilitate_customer`. RLS reescrita por tabla acorde a los roles.
+      **Probado end-to-end contra la base real** (crear préstamo → forzar
+      mora → verificar bloqueo titular+garante → pagar → rehabilitar →
+      verificar desbloqueo) — limpiado después, sin dejar datos de prueba.
+- [x] **Fase 2 — Motor de tasas.** `lib/services/interest-rates.ts` reescrito:
+      tasa directa fija leída de `parameters` (`interest_rate_1_installment`
+      /`_2_installments`/`_3_installments`), sin interpolación. `max_installments`
+      parametrizable. La fuente de verdad real es la función `create_loan` en
+      la DB (recalcula todo server-side); el service de Next.js es preview
+      para la UI antes de confirmar.
+- [x] **Fase 3 — Permisos.** `lib/permissions.ts`: cajero ahora tiene
+      `create`/`update: true` (alta de cliente/garantes, registrar pago),
+      sigue con `approve: false`. Confirmar préstamo (RLS + check explícito
+      en `/api/prestamos`) y aprobar/rechazar límites (`canApprove` en
+      `/api/credit-limits`) quedan restringidos a supervisor+.
+- [x] **Fase 4 — Módulos faltantes.** Cobranza (`/cobranza`,
+      `app/api/cobranza/route.ts` → `register_payment`/`rehabilitate_customer`)
+      y Alertas de mora (`/alertas`, `app/api/alertas/route.ts` →
+      `refresh_mora_and_blocks` + listado con filtro bloqueados). Menú lateral
+      (`app-shell.tsx`) actualizado a la navegación del spec (Inicio/Clientes/
+      Créditos/Garantes/Préstamos/Cobranza/Alertas). Botón "Registrar pago" en
+      el detalle de préstamo. Barrido de código: reemplazado todo uso de
+      `customers.is_active` / columnas viejas de `credit_limits` /
+      `loans.guarantor_id` que hubiera quedado colgado en `app/` y `lib/`.
+      **Pendiente, no bloqueante:** pantalla de administración de Parámetros
+      (sección 12 del spec) — hoy solo se editan por SQL/dashboard de Supabase,
+      no hay UI. "Topes por perfil" (monto máximo que cajero/supervisor puede
+      simular/aprobar) no se implementó — el resto de los topes del spec 12 sí.
 - [ ] **Fase 5 — Migración a Electron.** Envolver/adaptar la UI existente
       (probablemente convertir de Server Components de Next.js a un SPA React
       que consuma Supabase-js directo) en un shell Electron. Hacer esto
@@ -130,16 +148,140 @@ Marcar cada fase como hecha en este mismo archivo a medida que se completa
 - **¿Hay carpeta de Electron?** Buscar `electron/` o `package.json` con
   dependencia `electron` — si no está, Fase 5 no arrancó.
 
-## Próximo paso concreto (al momento de escribir este skill)
+## Bugs encontrados probando con usuarios reales por rol (y arreglados)
 
-Esperando que el usuario cree `C:\Proyectos\super-cloe\.env.local` con
-`NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` (no pegar esas
-credenciales en el chat). Una vez confirmado que el archivo existe:
-1. Inicializar git (`git init` + commit inicial) si todavía no está — no hay
-   red de seguridad de versionado en este repo.
-2. Inspeccionar el schema real de Supabase (no confiar en `/scripts`, ya
-   demostraron estar desactualizados) antes de escribir la migración
-   consolidada de la Fase 1.
+Después de aplicar la Fase 1, se probó con JWT reales (no `service_role`,
+que bypassea RLS y no sirve para validar esto) de los 3 perfiles seed
+(`cajero@cloe.com`, `supervisor@cloe.com`, `admin@cloe.com` -- password
+reseteada a `TestCloe2026!` para poder probar, son cuentas de test/seed sin
+datos reales). Se encontraron y corrigieron dos bugs reales, no hipotéticos:
+
+1. **`create_loan` y `rehabilitate_customer` no validaban el rol del que
+   llama** -- solo lo hacía el route handler de Next.js. Un cajero podía
+   invocar el RPC directo contra Supabase (sin pasar por la app) y confirmar
+   un préstamo o rehabilitar una cuenta, algo reservado a supervisor+. Esto
+   es crítico para el plan de app de escritorio (decisión de arquitectura
+   #3): Electron va a hablar directo con Supabase, sin la capa de Next.js
+   como filtro. Fix en `scripts/008_secure_rpc_functions.sql`: las funciones
+   ahora usan `auth.uid()` (identidad real de la sesión) en vez de un
+   parámetro `p_user_id` que el cliente podía falsificar, y `create_loan`/
+   `rehabilitate_customer` chequean el rol contra `profiles` antes de hacer
+   nada. Verificado: cajero bloqueado (400), supervisor puede.
+2. **Recursión infinita en RLS**: toda policy que hacía
+   `EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN (...))`
+   disparaba la propia RLS de `profiles` al evaluar la subconsulta -> error
+   500 "infinite recursion detected in policy for relation profiles".
+   Afectaba TODAS las policies de supervisor/admin (`loans`, `credit_limits`,
+   `loan_guarantors`, `parameters`, `audit_logs`) y las de `profiles` mismas
+   -- es decir, un supervisor real no podía confirmar un préstamo antes de
+   este fix. Corregido en `scripts/009_fix_rls_recursion.sql` con el patrón
+   estándar: función `current_user_role()` `SECURITY DEFINER` que lee el rol
+   sin re-disparar RLS, usada en vez de la subconsulta inline. Verificado con
+   los 3 roles: cajero bloqueado (403) al intentar INSERT directo en `loans`
+   o UPDATE en `credit_limits`, supervisor puede confirmar préstamo real de
+   punta a punta.
+
+**Importante para la próxima sesión**: `scripts/007_consolidated_schema.sql`
+tal como está (sin 008 y 009 aplicados encima) **tiene estos dos bugs**. Si
+en algún momento se recrea la base desde cero, hay que aplicar los tres
+archivos en orden (007 → 008 → 009), no solo 007.
+
+## Próximo paso concreto (actualizado 2026-08-26, fases 0-4 completas)
+
+Fases 0-4 del plan ya están hechas y verificadas contra la base real (ver
+checklist arriba). Lo que sigue, en orden de prioridad:
+
+1. **Probar la app corriendo de verdad** (`npm run dev` o `pnpm dev` — el
+   repo usa `pnpm-lock.yaml` pero pnpm no está instalado en esta máquina, se
+   usó `npm install` puntualmente para poder correr `tsc --noEmit`; no se
+   corrió el dev server todavía). Flujo a validar manualmente: alta de
+   cliente → alta de garante → crear límite → aprobarlo (supervisor) →
+   simular/confirmar préstamo → forzar mora → ver alertas → registrar pago →
+   rehabilitar.
+2. **Pantalla de Parámetros** (admin, spec sección 12) — hoy no existe, los
+   parámetros solo se tocan por SQL/dashboard de Supabase.
+3. Recién después de validar 1-4 en la app Next.js: **Fase 5, migración a
+   Electron** (no arrancar antes, ver decisión de arquitectura #3 arriba).
+
+### Cómo se aplicó la migración (para la próxima vez que haga falta)
+
+La REST API de PostgREST no permite DDL. Se usó una conexión directa a
+Postgres vía el **connection pooler** de Supabase (la conexión directa
+`db.<ref>.supabase.co` es IPv6-only y esta red no tiene salida IPv6):
+
+```
+SUPABASE_DB_URL=postgresql://postgres.<ref>:<password>@aws-<n>-<region>.pooler.supabase.com:5432/postgres
+```
+
+en `.env.local` (nunca commiteado). La `supabase db query -f archivo.sql` de
+la CLI **no sirve** para scripts con múltiples sentencias/funciones `$$...$$`
+(error "cannot insert multiple commands into a prepared statement"). Se
+resolvió con un script Node chico usando el driver `pg` (protocolo simple,
+sí soporta multi-statement) — ver
+`C:\Users\...\scratchpad\run_migration.js` de esa sesión como referencia, o
+recrear: `new Client({connectionString}).query(fs.readFileSync(archivo, 'utf8'))`.
+`supabase db push` no sirvió porque la base ya tenía una historia de
+migraciones previa (`supabase_migrations.schema_migrations`) sin los
+archivos locales correspondientes.
+
+## Auditoría de la base real (Supabase, verificada 2026-08-26)
+
+Inspeccionada vía el endpoint OpenAPI de PostgREST (`GET /rest/v1/` con la
+`service_role` key) + conteos/samples por tabla. Conclusión: **la base real
+no coincide ni con `/scripts` ni con `lib/types.ts`** — es una tercera
+variante. Solo hay datos de prueba (marzo 2026, 3 clientes) — confirmado que
+no hay nada real que preservar, se puede recrear el schema libremente.
+
+- **Tablas existentes**: `alerts`, `audit_logs`, `credit_limits`,
+  `customers`, `guarantor_relations`, `guarantors`, `installments`, `loans`,
+  `parameters`, `payments`, `profiles`.
+- **`guarantor_relations` YA EXISTE** en la base (creada a mano, fuera de los
+  scripts) con `titular_customer_id`/`guarantor_customer_id`/`status`/
+  `observations` — 1 fila de prueba. La auditoría de código original asumía
+  que faltaba crearla; no es así, solo falta que el script consolidado la
+  documente.
+- **`credit_limits` real ≠ scripts ≠ código** (tercera variante): columnas
+  reales son `credit_limit`, `available_credit`, `last_evaluation_date`,
+  `next_evaluation_date`, `evaluation_notes`, `approved_by` — no tiene
+  `approved_limit`/`committed_limit`/`status`/`guarantors_required`/
+  `guarantors_active_count`/`eligible_for_extension` que
+  `lib/credit-service.ts` y `lib/types.ts` esperan. El código actual
+  probablemente falla contra esta base (columnas inexistentes).
+- **`alerts` ya existe como tabla** (0 filas): `alert_type` enum
+  (overdue/limit_exceeded/document_expired/system), `priority` enum
+  (low/medium/high/critical), `title`/`message`/`reference_id`/
+  `reference_type`/`is_read`/`read_at`/`read_by`/`assigned_to`. La
+  infraestructura de datos está lista; falta el motor que la puebla y la UI
+  (`app/(dashboard)/alertas` no existe).
+- **`guarantors` (tabla vieja de texto libre)** existe pero está vacía (0
+  filas) — confirmado que es resabio sin uso real; la relación de garantes
+  vive en `guarantor_relations`. `loans.guarantor_id` sigue siendo FK única
+  y opcional a esta tabla vieja (no a `guarantor_relations`).
+- **`parameters`** tiene 8 filas sembradas del scaffold genérico original
+  (`default_interest_rate=2.5`, `max_loan_term_months=12`,
+  `overdue_penalty_rate=0.5`, `grace_period_days=3`,
+  `min_loan_amount`/`max_loan_amount`, `max_failed_logins`,
+  `session_timeout_minutes`) — ninguna es específica de Cloe (faltan tasas
+  15/25/30% por 1/2/3 cuotas, pago mínimo de rehabilitación, máximo de
+  garantes por titular/por garante).
+- **`customers.status`** (varchar libre, no enum) y **`customers.is_active`**
+  (boolean) conviven — los 3 registros de prueba tienen ambos en
+  `'active'`/`true`, no hay evidencia todavía de qué valores usa `status`
+  para bloqueado/mora.
+- **Enums reales confirmados**: `user_role`
+  (cajero/supervisor/administrador), `account_status`
+  (active/blocked/pending_password_change), `payment_method`
+  (cash/debit/transfer/discount), `audit_action`
+  (create/update/delete/login/logout/approve/reject), `loan_status`
+  (pending/approved/rejected/active/completed/defaulted/cancelled),
+  `installment_status` (pending/paid/partial/overdue/cancelled).
+- **Conteos** (todo dato de prueba, nada de producción):
+  customers=3, guarantors=0, guarantor_relations=1, credit_limits=3,
+  loans=0, installments=0, payments=0, alerts=0, audit_logs=0,
+  parameters=8, profiles=5.
+- **Proyecto Supabase**: ref `kttplwfjyizsfwhxmztc`
+  (`https://kttplwfjyizsfwhxmztc.supabase.co`), credenciales en
+  `.env.local` (gitignored, confirmado fuera del commit inicial).
 
 ## Auditoría original (spec vs código, referencia detallada)
 

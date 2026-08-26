@@ -27,7 +27,7 @@ export default async function CustomersPage() {
     .select(`
       *,
       credit_limits (
-        credit_limit,
+        approved_limit,
         available_credit
       )
     `)
@@ -40,7 +40,7 @@ export default async function CustomersPage() {
   const totalCustomers = customers?.length || 0
   const activeCustomers = customers?.filter(c => c.status === 'active').length || 0
   const blockedCustomers = customers?.filter(c => c.status === 'blocked').length || 0
-  const defaultedCustomers = customers?.filter(c => c.status === 'defaulted').length || 0
+  const suspendedCustomers = customers?.filter(c => c.status === 'suspended').length || 0
   const userCanCreate = canCreate(userRole as any)
 
   return (
@@ -74,14 +74,14 @@ export default async function CustomersPage() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-yellow-600">{blockedCustomers}</div>
-            <p className="text-xs text-muted-foreground">Bloqueados</p>
+            <div className="text-2xl font-bold text-red-600">{blockedCustomers}</div>
+            <p className="text-xs text-muted-foreground">Bloqueados (mora)</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-red-600">{defaultedCustomers}</div>
-            <p className="text-xs text-muted-foreground">En Mora</p>
+            <div className="text-2xl font-bold text-yellow-600">{suspendedCustomers}</div>
+            <p className="text-xs text-muted-foreground">Suspendidos</p>
           </CardContent>
         </Card>
       </div>

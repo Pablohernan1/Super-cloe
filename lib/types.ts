@@ -4,6 +4,12 @@ export type UserRole = 'cajero' | 'supervisor' | 'administrador'
 // Account status
 export type AccountStatus = 'active' | 'blocked' | 'pending_password_change'
 
+// Customer status
+export type CustomerStatus = 'active' | 'inactive' | 'blocked' | 'suspended'
+
+// Guarantor relation status
+export type GuarantorRelationStatus = 'active' | 'inactive'
+
 // Loan status
 export type LoanStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'defaulted' | 'cancelled'
 
@@ -44,21 +50,27 @@ export interface Profile {
 // Customer type
 export interface Customer {
   id: string
-  customer_code: string
+  customer_code: string | null
+  person_type: 'fisica' | 'juridica'
   document_type: string
   document_number: string
+  cuit_cuil: string | null
   first_name: string
   last_name: string
+  razon_social: string | null
+  fecha_constitucion: string | null
   birth_date: string | null
   phone: string | null
   phone_secondary: string | null
   email: string | null
   address: string | null
   city: string | null
+  localidad: string | null
+  provincia: string | null
   occupation: string | null
   employer: string | null
   monthly_income: number | null
-  is_active: boolean
+  status: CustomerStatus
   notes: string | null
   created_at: string
   updated_at: string
@@ -66,19 +78,28 @@ export interface Customer {
   updated_by: string | null
 }
 
-// Guarantor type
-export interface Guarantor {
+// Guarantor relation type (titular-garante; ambos son Customer)
+export interface GuarantorRelation {
   id: string
-  customer_id: string
-  document_type: string
-  document_number: string
-  full_name: string
-  phone: string | null
-  address: string | null
-  relationship: string | null
-  is_active: boolean
+  titular_customer_id: string
+  guarantor_customer_id: string
+  status: GuarantorRelationStatus
+  observations: string | null
+  created_by: string | null
+  updated_by: string | null
   created_at: string
   updated_at: string
+  // Relations
+  titular?: Customer
+  guarantor?: Customer
+}
+
+// Loan-guarantor link (1 o 2 garantes por préstamo)
+export interface LoanGuarantor {
+  loan_id: string
+  guarantor_customer_id: string
+  created_at: string
+  guarantor?: Customer
 }
 
 // Credit limit status
@@ -112,7 +133,6 @@ export interface Loan {
   id: string
   loan_number: string
   customer_id: string
-  guarantor_id: string | null
   principal_amount: number
   interest_rate: number
   total_amount: number
@@ -132,7 +152,7 @@ export interface Loan {
   created_by: string | null
   // Relations
   customer?: Customer
-  guarantor?: Guarantor
+  guarantors?: LoanGuarantor[]
 }
 
 // Installment type
@@ -160,6 +180,7 @@ export interface Payment {
   payment_number: string
   installment_id: string
   amount: number
+  applied_penalty: number
   payment_method: PaymentMethod
   reference_number: string | null
   notes: string | null

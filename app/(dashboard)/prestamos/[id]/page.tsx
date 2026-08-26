@@ -27,7 +27,10 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         first_name,
         last_name,
         document_number,
-        is_active
+        status
+      ),
+      loan_guarantors (
+        guarantor:guarantor_customer_id ( id, first_name, last_name, customer_code )
       )
     `)
     .eq('id', id)
@@ -158,12 +161,36 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         </CardContent>
       </Card>
 
+      {/* Garantes */}
+      {loan.loan_guarantors && loan.loan_guarantors.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Garantes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            {loan.loan_guarantors.map((lg: any) => (
+              <Badge key={lg.guarantor.id} variant="secondary">
+                {lg.guarantor.first_name} {lg.guarantor.last_name} ({lg.guarantor.customer_code})
+              </Badge>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Installments Table */}
       {installments && installments.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Plan de Cuotas</CardTitle>
-            <CardDescription>Total de {installments.length} cuotas</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Plan de Cuotas</CardTitle>
+              <CardDescription>Total de {installments.length} cuotas</CardDescription>
+            </div>
+            <Link href={`/cobranza?loan_id=${loan.id}`}>
+              <Button>Registrar pago</Button>
+            </Link>
           </CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-hidden">
@@ -176,6 +203,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                     <TableHead className="text-right">Interés</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Pagado</TableHead>
+                    <TableHead className="text-right">Interés mora</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -195,6 +223,9 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                       </TableCell>
                       <TableCell className="text-right">
                         ${(inst.paid_amount || 0).toLocaleString('es-AR')}
+                      </TableCell>
+                      <TableCell className="text-right text-destructive">
+                        {inst.penalty_amount > 0 ? `$${inst.penalty_amount.toLocaleString('es-AR')}` : '-'}
                       </TableCell>
                       <TableCell>
                         <Badge variant={inst.status === 'paid' ? 'default' : 'secondary'}>

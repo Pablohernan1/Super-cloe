@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAuditLog } from '@/lib/audit-logger'
-import { canUpdate, canCreate } from '@/lib/permissions'
+import { canApprove, canCreate } from '@/lib/permissions'
 
 export async function POST(request: Request) {
   try {
@@ -100,7 +100,8 @@ export async function PATCH(request: Request) {
       .eq('id', user.id)
       .single()
 
-    if (!canUpdate(userProfile?.role)) {
+    // Aprobar/rechazar límites queda restringido a supervisor+ (spec 4, 8.6)
+    if (!canApprove(userProfile?.role)) {
       return Response.json({ error: 'Forbidden' }, { status: 403 })
     }
 

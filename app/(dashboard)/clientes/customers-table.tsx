@@ -41,7 +41,7 @@ type Customer = {
   status: string
   created_at: string
   credit_limits?: {
-    credit_limit: number
+    approved_limit: number
     available_credit: number
   }[] | null
 }
@@ -53,15 +53,15 @@ interface CustomersTableProps {
 const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-800',
   inactive: 'bg-gray-100 text-gray-800',
-  blocked: 'bg-yellow-100 text-yellow-800',
-  defaulted: 'bg-red-100 text-red-800',
+  blocked: 'bg-red-100 text-red-800',
+  suspended: 'bg-yellow-100 text-yellow-800',
 }
 
 const statusLabels: Record<string, string> = {
   active: 'Activo',
   inactive: 'Inactivo',
-  blocked: 'Bloqueado',
-  defaulted: 'En Mora',
+  blocked: 'Bloqueado (mora)',
+  suspended: 'Suspendido',
 }
 
 export function CustomersTable({ customers }: CustomersTableProps) {
@@ -205,7 +205,7 @@ export function CustomersTable({ customers }: CustomersTableProps) {
                   <TableCell>{customer.city || '-'}</TableCell>
                   <TableCell>
                     {customer.credit_limits?.[0] ? (
-                      <CurrencyDisplay amount={customer.credit_limits[0].credit_limit} />
+                      <CurrencyDisplay amount={customer.credit_limits[0].approved_limit} />
                     ) : (
                       <span className="text-muted-foreground">Sin limite</span>
                     )}

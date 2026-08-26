@@ -185,8 +185,7 @@ export function CustomerForm({ customer, isEditing = false }: CustomerFormProps)
             .from('credit_limits')
             .upsert({
               customer_id: customer.id,
-              credit_limit: creditLimit,
-              available_credit: creditLimit,
+              approved_limit: creditLimit,
             }, { onConflict: 'customer_id' })
 
           if (creditError) throw creditError
@@ -224,8 +223,7 @@ export function CustomerForm({ customer, isEditing = false }: CustomerFormProps)
             .from('credit_limits')
             .insert({
               customer_id: newCustomer.id,
-              credit_limit: creditLimit,
-              available_credit: creditLimit,
+              approved_limit: creditLimit,
             })
 
           if (creditError) throw creditError
@@ -588,8 +586,8 @@ export function CustomerForm({ customer, isEditing = false }: CustomerFormProps)
               <SelectContent>
                 <SelectItem value="active">Activo</SelectItem>
                 <SelectItem value="inactive">Inactivo</SelectItem>
-                <SelectItem value="blocked">Bloqueado</SelectItem>
-                <SelectItem value="defaulted">En Mora</SelectItem>
+                <SelectItem value="blocked">Bloqueado (mora)</SelectItem>
+                <SelectItem value="suspended">Suspendido</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>

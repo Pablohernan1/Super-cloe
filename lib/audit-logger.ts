@@ -28,24 +28,6 @@ export async function createAuditLog(
 
     if (!user) return
 
-    // Build changes object
-    const changes: Record<string, any> = {}
-    
-    if (action === 'create') {
-      // For create, all new values are the changes
-      Object.entries(newValues).forEach(([key, value]) => {
-        changes[key] = { before: null, after: value }
-      })
-    } else {
-      // For update/approve/reject, compare old and new values
-      Object.entries(newValues).forEach(([key, newValue]) => {
-        const oldValue = oldValues?.[key]
-        if (oldValue !== newValue) {
-          changes[key] = { before: oldValue, after: newValue }
-        }
-      })
-    }
-
     const { error } = await supabase
       .from('audit_logs')
       .insert({
@@ -55,7 +37,6 @@ export async function createAuditLog(
         record_id: recordId,
         old_values: oldValues,
         new_values: newValues,
-        changes: changes,
         created_at: new Date().toISOString(),
       })
 

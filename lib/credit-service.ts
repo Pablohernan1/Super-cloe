@@ -63,15 +63,13 @@ export async function reserveCredit(
       }
     }
 
-    // Update limit
+    // Update limit (available_credit se recalcula solo, es columna generada)
     const newCommitted = limit.committed_limit + amount
-    const newAvailable = limit.approved_limit - newCommitted
 
     const { error: updateError } = await supabase
       .from('credit_limits')
       .update({
         committed_limit: newCommitted,
-        available_credit: newAvailable,
         updated_by: userId,
         updated_at: new Date().toISOString(),
       })
@@ -120,15 +118,13 @@ export async function releaseCredit(
       }
     }
 
-    // Update limit
+    // Update limit (available_credit se recalcula solo, es columna generada)
     const newCommitted = Math.max(0, limit.committed_limit - amount)
-    const newAvailable = limit.approved_limit - newCommitted
 
     const { error: updateError } = await supabase
       .from('credit_limits')
       .update({
         committed_limit: newCommitted,
-        available_credit: newAvailable,
         updated_by: userId,
         updated_at: new Date().toISOString(),
       })

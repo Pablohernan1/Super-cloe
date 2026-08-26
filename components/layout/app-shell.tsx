@@ -4,21 +4,23 @@ import { Topbar } from './topbar'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, FileText, Settings } from 'lucide-react'
+import { Home, Users, FileText, CreditCard, HandCoins, Bell } from 'lucide-react'
 
 interface AppShellProps {
   children: React.ReactNode
 }
 
+// Alineado con la navegación del spec (sección 6): Inicio, Clientes,
+// Garantes, Préstamos, Cobranza, Alertas. Créditos queda como pantalla
+// adicional para gestionar límites (spec 8.3).
 const navItems = [
-  { title: 'Dashboard', href: '/dashboard', icon: Home },
+  { title: 'Inicio', href: '/dashboard', icon: Home },
   { title: 'Clientes', href: '/clientes', icon: Users },
-  { title: 'Créditos', href: '/creditos', icon: FileText },
+  { title: 'Créditos', href: '/creditos', icon: CreditCard },
   { title: 'Garantes', href: '/garantes', icon: Users },
   { title: 'Préstamos', href: '/prestamos', icon: FileText },
-  { title: 'Cuotas', href: '/cuotas', icon: FileText },
-  { title: 'Reportes', href: '/reportes', icon: FileText },
-  { title: 'Configuración', href: '/configuracion', icon: Settings },
+  { title: 'Cobranza', href: '/cobranza', icon: HandCoins },
+  { title: 'Alertas', href: '/alertas', icon: Bell },
 ]
 
 function FixedSidebar() {
