@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { LogOut, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
+import { LogOut, RefreshCw, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,12 +18,54 @@ export function Topbar() {
   const navigate = useNavigate()
   const { profile, user, signOut, refreshProfile } = useAuth()
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
+  const canUpdate = profile?.role === 'administrador' && typeof window !== 'undefined' && !!window.electronAPI
 
   useEffect(() => {
     if (user && !profile?.role) {
       refreshProfile()
     }
   }, [user, profile?.role, refreshProfile])
+
+  useEffect(() => {
+    if (!window.electronAPI) return
+    const unsubscribe = window.electronAPI.onUpdateStatus((data) => {
+      switch (data.status) {
+        case 'checking':
+          break
+        case 'available':
+          toast.info(`Descargando actualización${data.version ? ` v${data.version}` : ''}...`)
+          break
+        case 'not-available':
+          toast.success('Ya estás en la última versión.')
+          setIsCheckingUpdate(false)
+          break
+        case 'downloading':
+          break
+        case 'downloaded':
+          setIsCheckingUpdate(false)
+          toast.success('Actualización descargada. La app se va a reiniciar para instalarla.', {
+            action: {
+              label: 'Reiniciar ahora',
+              onClick: () => window.electronAPI?.installUpdate(),
+            },
+            duration: 15000,
+          })
+          break
+        case 'error':
+          setIsCheckingUpdate(false)
+          toast.error(data.message || 'No se pudo buscar la actualización.')
+          break
+      }
+    })
+    return unsubscribe
+  }, [])
+
+  const handleCheckForUpdate = async () => {
+    setIsCheckingUpdate(true)
+    toast('Buscando actualizaciones...')
+    await window.electronAPI?.checkForUpdate()
+  }
 
   const handleRefreshProfile = async () => {
     setIsRefreshing(true)
@@ -70,6 +113,12 @@ export function Topbar() {
               <RefreshCw className={cn('mr-2 h-4 w-4', isRefreshing && 'animate-spin')} />
               {isRefreshing ? 'Recargando...' : 'Recargar Perfil'}
             </DropdownMenuItem>
+            {canUpdate && (
+              <DropdownMenuItem onClick={handleCheckForUpdate} disabled={isCheckingUpdate}>
+                <Download className={cn('mr-2 h-4 w-4', isCheckingUpdate && 'animate-pulse')} />
+                {isCheckingUpdate ? 'Buscando...' : 'Buscar actualización'}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
               <LogOut className="mr-2 h-4 w-4" />

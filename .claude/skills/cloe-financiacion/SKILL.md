@@ -103,6 +103,34 @@ la Fase 1 y ya no reflejan la realidad. Resumen real a esta fecha:
   cuenta de Juan Perez completa (bloqueada por mora, límite $150.000,
   disponible $104.000, cuota vencida $46.000). **Portal QR
   100% operativo, no queda nada pendiente de esta funcionalidad.**
+- **Repo subido a GitHub** (2026-08-27): `https://github.com/Pablohernan1/Super-cloe`
+  (privado). Rama local renombrada de `master` a `main` para el push.
+- **Botón "Buscar actualización" implementado** (2026-08-27), en el menú
+  del avatar de `desktop/src/components/layout/topbar.tsx`, visible solo
+  si `profile.role === 'administrador'` y corriendo dentro de Electron
+  (`window.electronAPI` presente -- no aparece si se abre `vite dev` en un
+  navegador normal). Mecanismo: `electron-updater` en
+  `desktop/electron/main.cjs` (`autoDownload=true`,
+  `autoInstallOnAppQuit=false`), 2 handlers IPC (`check-for-update`,
+  `install-update`) expuestos vía `contextBridge` en
+  `desktop/electron/preload.cjs`, tipados en `desktop/src/electron.d.ts`.
+  El botón dispara `checkForUpdate()`; el estado (buscando/descargando/
+  lista/error) se muestra con `sonner` toasts, con acción "Reiniciar
+  ahora" cuando ya está descargada. `desktop/package.json` tiene
+  `build.publish` apuntando a `{provider: 'github', owner:
+  'Pablohernan1', repo: 'Super-cloe'}` y un script nuevo
+  `electron:publish` (`electron-builder --publish always`).
+  **Para cortar una release real hace falta, del lado del usuario**: un
+  GitHub Personal Access Token (classic, scope `repo` porque el repo es
+  privado) puesto en la variable de entorno `GH_TOKEN` al correr
+  `npm run electron:publish` desde `desktop/` -- no se generó ni guardó
+  ningún token en esta sesión, es una acción que solo puede hacer el
+  usuario desde su cuenta de GitHub. También hay que subir
+  `package.json version` en cada release (electron-updater compara
+  semver contra los tags de GitHub Releases). Probado: `npm run build`
+  (tsc + vite) compila sin errores con los cambios; **no se corrió
+  todavía un `electron:publish` real** (necesita el token) ni se probó el
+  flujo de update de punta a punta contra un release real.
 - Pendiente / diferido explícitamente por el usuario: módulo de Reportes
   (confirmado que no lo pide el spec), `electron:build` (empaquetado de
   instalador) — todavía no se corrió, solo `electron:dev` fue probado.

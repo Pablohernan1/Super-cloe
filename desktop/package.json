@@ -10,7 +10,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env ELECTRON_START_URL=http://localhost:5173 electron .\"",
-    "electron:build": "tsc -b && vite build && electron-builder"
+    "electron:build": "tsc -b && vite build && electron-builder",
+    "electron:publish": "tsc -b && vite build && electron-builder --publish always"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "1.1.15",
@@ -26,6 +27,7 @@
     "@supabase/supabase-js": "^2.99.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.564.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
@@ -66,6 +68,11 @@
     },
     "win": {
       "target": "nsis"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Pablohernan1",
+      "repo": "Super-cloe"
     }
   }
 }
