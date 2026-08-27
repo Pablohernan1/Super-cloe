@@ -80,7 +80,8 @@
     "publish": {
       "provider": "github",
       "owner": "Pablohernan1",
-      "repo": "Super-cloe"
+      "repo": "Super-cloe",
+      "releaseType": "release"
     }
   }
 }
