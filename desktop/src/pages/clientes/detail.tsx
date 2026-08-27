@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { CurrencyDisplay } from '@/components/ui/currency-display'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { GuarantorSection } from '@/components/layout/guarantor-section'
+import { CustomerPortalCard } from '@/components/layout/customer-portal-card'
 import { Spinner } from '@/components/ui/spinner'
 import { Edit, User, Building2, Phone, Mail, MapPin, Briefcase, CreditCard, FileText, Calendar } from 'lucide-react'
 
@@ -37,7 +38,7 @@ export default function CustomerDetailPage() {
         .select(`
           *,
           credit_limits ( id, approved_limit, committed_limit, available_credit, status, guarantors_active_count, eligible_for_extension ),
-          loans ( id, loan_number, principal_amount, total_amount, status, created_at )
+          loans!loans_customer_id_fkey ( id, loan_number, principal_amount, total_amount, status, created_at )
         `)
         .eq('id', id)
         .single()
@@ -348,6 +349,8 @@ export default function CustomerDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      <CustomerPortalCard customerName={getDisplayName()} customerCode={customer.customer_code} portalToken={customer.portal_token} />
 
       <GuarantorSection customerId={id!} isGuarantor={true} />
     </div>

@@ -63,3 +63,18 @@ export function canApprove(role: UserRole | null | undefined): boolean {
 export function canManageUsers(role: UserRole | null | undefined): boolean {
   return hasPermission(role, 'manage_users')
 }
+
+// Límites de crédito: definir/aprobar es tarea de supervisor+ (spec sección
+// 4 y paso 4 del flujo end-to-end -- "Supervisor o regla automática define
+// el límite aprobado"). El cajero ve el disponible de un cliente puntual
+// (dashboard, ficha de cliente) pero no gestiona la sección completa.
+export function canManageCreditLimits(role: UserRole | null | undefined): boolean {
+  return role === 'supervisor' || role === 'administrador'
+}
+
+// Parámetros del sistema (tasas, mora, límites estructurales -- spec sección
+// 12): solo administrador, tanto en UI como reforzado en RLS
+// (parameters_update_admin en scripts/009_fix_rls_recursion.sql).
+export function canManageParameters(role: UserRole | null | undefined): boolean {
+  return role === 'administrador'
+}

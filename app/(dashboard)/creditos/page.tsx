@@ -9,8 +9,10 @@ import { Plus, Filter } from 'lucide-react'
 import Link from 'next/link'
 import { CreditLimitTable } from './credit-limits-table'
 import { useAuth } from '@/lib/auth-context'
-import { canCreate } from '@/lib/permissions'
+import { canManageCreditLimits } from '@/lib/permissions'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ShieldAlert } from 'lucide-react'
 
 interface CreditLimitData {
   id: string
@@ -38,7 +40,7 @@ export default function CreditLimitsPage() {
   const [filteredLimits, setFilteredLimits] = useState<CreditLimitData[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const userCanCreate = canCreate(profile?.role as any)
+  const canManage = canManageCreditLimits(profile?.role as any)
 
   const fetchLimits = async () => {
     setLoading(true)
@@ -74,6 +76,21 @@ export default function CreditLimitsPage() {
     fetchLimits()
   }, [])
 
+  if (profile && !canManage) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Límites de Crédito" description="Gestión de límites de crédito por cliente" />
+        <Alert variant="destructive">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription>
+            Esta sección es exclusiva de supervisor y administrador. Si necesitás ver el disponible de un cliente
+            puntual, buscalo desde Inicio o su ficha de cliente.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
   const totalLimits = limits.length
   const approvedLimits = limits.filter(l => l.status === 'approved').length
   const pendingLimits = limits.filter(l => l.status === 'pending_approval').length
@@ -87,7 +104,7 @@ export default function CreditLimitsPage() {
         title="Límites de Crédito"
         description="Gestión de límites de crédito por cliente"
       >
-        {userCanCreate && (
+        {canManage && (
           <Link href="/creditos/nuevo">
             <Button>
               <Plus className="mr-2 h-4 w-4" />

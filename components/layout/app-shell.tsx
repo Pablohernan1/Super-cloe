@@ -4,7 +4,8 @@ import { Topbar } from './topbar'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, FileText, CreditCard, HandCoins, Bell } from 'lucide-react'
+import { Home, Users, FileText, CreditCard, HandCoins, Bell, QrCode, Settings } from 'lucide-react'
+import { useAuth } from '@/lib/auth-context'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -12,19 +13,25 @@ interface AppShellProps {
 
 // Alineado con la navegación del spec (sección 6): Inicio, Clientes,
 // Garantes, Préstamos, Cobranza, Alertas. Créditos queda como pantalla
-// adicional para gestionar límites (spec 8.3).
+// adicional para gestionar límites (spec 8.3) -- solo supervisor+, es
+// tarea de aprobación de riesgo, no algo que el cajero necesite navegar
+// (spec sección 4: "Supervisor... aprobar límites").
 const navItems = [
   { title: 'Inicio', href: '/dashboard', icon: Home },
   { title: 'Clientes', href: '/clientes', icon: Users },
-  { title: 'Créditos', href: '/creditos', icon: CreditCard },
+  { title: 'Créditos', href: '/creditos', icon: CreditCard, roles: ['supervisor', 'administrador'] },
   { title: 'Garantes', href: '/garantes', icon: Users },
   { title: 'Préstamos', href: '/prestamos', icon: FileText },
   { title: 'Cobranza', href: '/cobranza', icon: HandCoins },
   { title: 'Alertas', href: '/alertas', icon: Bell },
+  { title: 'Tarjetas', href: '/tarjetas', icon: QrCode, roles: ['supervisor', 'administrador'] },
+  { title: 'Parámetros', href: '/parametros', icon: Settings, roles: ['administrador'] },
 ]
 
 function FixedSidebar() {
   const pathname = usePathname()
+  const { profile } = useAuth()
+  const visibleItems = navItems.filter((item) => !item.roles || item.roles.includes(profile?.role || ''))
 
   return (
     <aside className="w-64 bg-sidebar border-r border-border flex flex-col">
@@ -32,10 +39,10 @@ function FixedSidebar() {
       <div className="h-16 flex items-center justify-center border-b border-border">
         <div className="font-bold text-white text-lg">Cloe</div>
       </div>
-      
+
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-2">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           

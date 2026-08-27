@@ -61,13 +61,16 @@ export function Topbar({ onMenuClick, sidebarOpen }: TopbarProps) {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-4 border-b bg-card px-4 lg:px-6" suppressHydrationWarning>
+    <header
+      className="flex h-16 shrink-0 items-center gap-4 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground lg:px-6"
+      suppressHydrationWarning
+    >
       {/* Menu Toggle */}
       <Button
         variant="ghost"
         size="icon"
         onClick={onMenuClick}
-        className="shrink-0"
+        className="shrink-0 text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
       >
         <span className="lg:hidden">
           <Menu className="h-5 w-5" />
@@ -90,7 +93,11 @@ export function Topbar({ onMenuClick, sidebarOpen }: TopbarProps) {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            >
               <Bell className="h-5 w-5" />
               <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
                 3
@@ -134,7 +141,10 @@ export function Topbar({ onMenuClick, sidebarOpen }: TopbarProps) {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 pl-2 pr-3">
+            <Button
+              variant="ghost"
+              className="gap-2 pl-2 pr-3 text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            >
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium uppercase text-primary-foreground">
                 {profile?.full_name?.charAt(0) || 'U'}
               </div>
@@ -142,7 +152,7 @@ export function Topbar({ onMenuClick, sidebarOpen }: TopbarProps) {
                 <span className="text-sm font-medium">
                   {profile?.full_name || 'Usuario'}
                 </span>
-                <span className="text-xs capitalize text-muted-foreground">
+                <span className="text-xs capitalize text-sidebar-foreground/70">
                   {profile?.role || 'Sin rol'}
                 </span>
               </div>

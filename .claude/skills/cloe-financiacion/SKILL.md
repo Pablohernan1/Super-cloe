@@ -15,6 +15,98 @@ este skill resume lo que ya se auditó para no releerlo entero cada vez.
 **No preguntar de nuevo lo que ya está decidido más abajo.** Si algo no está
 cubierto acá, ahí sí preguntar al usuario.
 
+## Estado actual (actualizado 2026-08-26)
+
+Las secciones de abajo ("Estado del proyecto", "Plan de fases", "Próximo paso
+concreto") quedaron desactualizadas — se escribieron cuando recién arrancaba
+la Fase 1 y ya no reflejan la realidad. Resumen real a esta fecha:
+
+- **Fases 1-4 completas y verificadas** con JWT reales de los 3 roles (no
+  service_role). Migraciones aplicadas en orden hasta
+  `scripts/014_broader_mora_alerts.sql` (ver detalle de cada una en el
+  historial de commits / conversación — no repetido acá para no duplicar).
+- **Fase 5 (Electron) completa y funcionando**: app en `desktop/` (Vite +
+  React + react-router HashRouter + Supabase-js directo, sin capa de API de
+  Next.js) lanza como ventana nativa. Toda pantalla nueva que se agregue al
+  Next.js (`app/(dashboard)/...`) **debe espejarse en `desktop/src/pages/...`**
+  — es el patrón establecido toda la sesión, no saltearlo.
+- **Portal QR del cliente**: app separada `portal-cliente/` (Next.js, puerto
+  3002 local), ruta `/c/{portal_token}`, verificación con últimos 4 dígitos
+  del documento vía Server Action + service role (`server-only`). Pendiente:
+  deploy real a Vercel (hoy `localhost:3002` como placeholder en
+  `NEXT_PUBLIC_PORTAL_BASE_URL` / `VITE_PORTAL_BASE_URL`).
+- **Pantalla "Tarjetas"** (impresión masiva de tarjetas QR tamaño CR80,
+  85×54mm) agregada en ambas apps, restringida a supervisor/administrador.
+- **Cobranza rediseñada** (`app/(dashboard)/cobranza/page.tsx` y
+  `desktop/src/pages/cobranza/index.tsx`): ya no requiere buscar un cliente
+  primero. Muestra de entrada una tabla con todos los préstamos con saldo
+  pendiente (activos y en mora, ambos calculados desde `installments` en
+  estado pending/partial/overdue), y el campo de búsqueda es un filtro
+  puramente client-side sobre esa lista (nombre/código/documento/número de
+  préstamo). Click en "Cobrar" en una fila carga el panel de registro de pago
+  de siempre (`loadForCustomer`), sin tocar esa lógica.
+- **Pantalla de Parámetros (admin)** agregada:
+  `app/(dashboard)/parametros/page.tsx` y
+  `desktop/src/pages/parametros/index.tsx`, ítem de nav en ambos app-shell
+  con `roles: ['administrador']`, `canManageParameters()` nuevo en
+  `lib/permissions.ts` / `desktop/src/lib/permissions.ts`. Edita
+  `parameters.value` fila por fila (Guardar por parámetro, agrupados por
+  tema: tasas, montos, mora/rehabilitación, límites de crédito, garantes,
+  seguridad). No hizo falta migración nueva: la RLS `parameters_update_admin`
+  (`current_user_role() = 'administrador'`) ya estaba desde el script 009.
+  Verificado que `lib/services/interest-rates.ts` /
+  `desktop/src/lib/interest-rates.ts` leen `parameters` en cada cálculo (sin
+  cachear), así que un cambio acá impacta el simulador y `create_loan` al
+  toque, sin redeploy.
+- **Nombres de garante clickeables**: en el detalle de préstamo
+  (`app/(dashboard)/prestamos/[id]/page.tsx` y
+  `desktop/src/pages/prestamos/detail.tsx`) y en las dos listas de
+  `components/layout/guarantor-section.tsx` /
+  `desktop/src/components/layout/guarantor-section.tsx` ("Garantes
+  Asociados" y "Este Cliente Garantiza a"), el nombre ahora es un link a
+  `/clientes/{id}` de esa persona.
+- **`portal-cliente` desplegado a Vercel** (2026-08-27): proyecto
+  `cloe-portal-cliente` en el equipo `zetaprojects`
+  (`prj_He8P3ZCE1JnRghn2x73iGg6KUDWG`), URL de producción
+  `https://cloe-portal-cliente.vercel.app`. Actualizado en `.env.local`
+  (`NEXT_PUBLIC_PORTAL_BASE_URL`) y `desktop/.env`
+  (`VITE_PORTAL_BASE_URL`). El usuario ya desactivó "Vercel Authentication"
+  (Deployment Protection) y cargó `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`
+  en el proyecto. También se corrigió un bug de contraste (input de "últimos
+  4 dígitos" con texto invisible al escribir, sin color explícito) en
+  `portal-cliente/src/app/c/[token]/portal-client.tsx` (se agregó
+  `text-gray-900 placeholder:text-gray-400`).
+  **Nota importante — el MCP de Vercel (`deploy_to_vercel`,
+  `list_projects`, `get_project`) quedó inutilizable para este proyecto**:
+  los tools de lectura devuelven 404 para proyectos confirmados existentes
+  (bug), y el segundo intento de `deploy_to_vercel` devolvió 403
+  "You don't have permission to create a [Production/Preview] Deployment"
+  — no se resolvió solo, incluso reintentando. **Se resolvió instalando la
+  Vercel CLI (`npm i -g vercel`) y desplegando con la sesión propia del
+  usuario** (`vercel link --yes --project cloe-portal-cliente --scope
+  zetaprojects` + `vercel --prod --yes`, corridos desde `portal-cliente/`)
+  — funcionó al toque, confirmando que el bloqueo era del token/identidad
+  del MCP, no de la cuenta del usuario ni del proyecto. **Para cualquier
+  deploy futuro de `portal-cliente` (o cualquier otro proyecto Vercel de
+  este repo), usar la CLI directamente en vez del MCP** — más rápido y sin
+  este problema. La CLI ya está instalada globalmente y el directorio
+  `portal-cliente/` ya quedó linkeado (`.vercel/project.json`).
+  **Verificado end-to-end (2026-08-27) y funcionando**: bug real encontrado
+  en el camino — el usuario había pegado `SUPABASE_DB_URL` (connection
+  string de Postgres, `postgresql://postgres.<ref>:<pass>@aws-...
+  pooler.supabase.com:5432/postgres`, la que se usa para correr
+  migraciones) en la variable `SUPABASE_URL` del proyecto por confundir
+  ambas en `.env.local` de la raíz — daba
+  `Error: Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL` (visto
+  vía `vercel logs`). Corregido a `https://kttplwfjyizsfwhxmztc.supabase.co`
+  y redeploy manual del usuario -> confirmado con captura mostrando la
+  cuenta de Juan Perez completa (bloqueada por mora, límite $150.000,
+  disponible $104.000, cuota vencida $46.000). **Portal QR
+  100% operativo, no queda nada pendiente de esta funcionalidad.**
+- Pendiente / diferido explícitamente por el usuario: módulo de Reportes
+  (confirmado que no lo pide el spec), `electron:build` (empaquetado de
+  instalador) — todavía no se corrió, solo `electron:dev` fue probado.
+
 ## Estado del proyecto (por qué se está reescribiendo)
 
 El código original fue generado con v0/Vercel (Next.js 16 + Supabase) y
@@ -155,6 +247,54 @@ Marcar cada fase como hecha en este mismo archivo a medida que se completa
         que se complete la descarga del binario, y después
         `npm run electron:dev` ya funciona (incluso en esta red, una vez
         cacheado el binario localmente).
+
+## Auditoría spec vs. implementación, ronda 2 (2026-08-26, post Fase 5)
+
+Repaso del PDF completo contra lo construido en Fases 1-5. Un hallazgo ya
+se corrigió (crítico), el resto quedan pendientes de decidir prioridad con
+el usuario:
+
+- [x] **Corregido — falta auditoría en alta/edición de cliente y garantes
+      en `desktop/`.** Al sacar la capa de API routes (que sí llamaban
+      `createAuditLog()`), el alta/edición de clientes y alta de garantes
+      en la app de escritorio quedó sin registrar en `audit_logs` —
+      contradice spec 8.6. Fix: `scripts/010_audit_triggers.sql`, trigger
+      genérico `audit_row_change()` en `customers`, `guarantor_relations` y
+      `credit_limits` (AFTER INSERT/UPDATE) que audita sin importar qué
+      cliente escriba. No se agregó en `loans`/`payments` porque esas ya
+      quedan auditadas explícitamente (y con más detalle) dentro de
+      `create_loan`/`register_payment`/`rehabilitate_customer`/
+      `refresh_mora_and_blocks` -- iba a duplicar. Probado con un JWT real
+      de cajero insertando directo por REST: quedó en `audit_logs`
+      correctamente.
+- [ ] **Pantalla B no implementada tal como la pide el spec.** Sección 6:
+      la primera vista del cajero debería ser una búsqueda rápida por
+      CUIT/CUIL con resumen instantáneo (estado, disponible, mora,
+      garantes, próximos vencimientos) y acciones rápidas
+      (Cuenta/Préstamo/Cobranza/Alertas). Hoy `/dashboard` (Next.js y
+      desktop) muestra KPIs genéricos en su lugar -- esto ya estaba en la
+      auditoría original (antes de Fase 1) y nunca se corrigió. Pendiente
+      decidir con el usuario: ¿reemplazar el dashboard actual, o agregar la
+      búsqueda rápida como vista adicional?
+- [ ] **Sin flujo para editar un límite ya aprobado con motivo.** Spec 8.3:
+      "cualquier modificación manual de límite debe guardar valor anterior,
+      valor nuevo, motivo, usuario y fecha/hora". Hoy solo existe
+      alta + aprobar/rechazar (`credit-limit-actions.tsx`), no un "editar
+      monto" con motivo capturado.
+- [ ] **Sin comprobante de pago.** Spec 13 pide comprobantes con número de
+      operación, deuda actualizada y próxima fecha de pago tras un pago en
+      Cobranza. Hoy solo hay un mensaje de confirmación en pantalla.
+- [ ] **Menores, no bloqueantes:** sin filtro de rango de fechas en
+      cuotas/alertas (spec 11 lo pide explícitamente); sin refinanciación
+      (el estado `loan_status` no tiene "refinanciado" y no hay ningún
+      flujo que lo alcance -- spec 8.4 lo sugiere pero spec 13 dice que el
+      MVP puede arrancar sin esto); `guarantor_relations` no tiene un campo
+      estructurado de "relación con titular" (solo `observations` libre).
+- Confirmado que **no falta nada de QR/lectura de tarjeta**: spec sección
+  13 dice literalmente "preparar la arquitectura para *futura*
+  integración" con eso -- es una nota de no cerrar esa puerta a futuro, no
+  un requisito a construir ahora. No hay ninguna pantalla que lo pida en
+  las secciones 6-10 (las de requisitos concretos).
 
 ## Bloqueo de red: descarga del binario de Electron (2026-08-26)
 

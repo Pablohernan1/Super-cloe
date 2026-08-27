@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { calculateLoanPayment, type LoanCalculation } from '@/lib/interest-rates'
 import { PageHeader } from '@/components/ui/page-header'
@@ -8,13 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
-import { AlertCircle, CheckCircle, Search } from 'lucide-react'
+import { AlertCircle, CheckCircle, Search, Pencil } from 'lucide-react'
 import { FieldGroup, FieldLabel } from '@/components/ui/field'
 
 export default function LoanSimulationPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [customers, setCustomers] = useState<any[]>([])
@@ -31,21 +31,25 @@ export default function LoanSimulationPage() {
   const [isCalculating, setIsCalculating] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [editing, setEditing] = useState(true)
 
+  // Muestra clientes activos apenas se entra a la pantalla, y filtra a
+  // medida que se escribe.
   const performSearch = useCallback(async (query: string) => {
-    if (query.length < 1) {
-      setCustomers([])
-      return
-    }
     setIsSearching(true)
     try {
-      const { data } = await supabase
+      let q = supabase
         .from('customers')
         .select('id, first_name, last_name, cuit_cuil, status, customer_code')
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,cuit_cuil.ilike.%${query}%,customer_code.ilike.%${query}%`)
         .eq('status', 'active')
-        .limit(20)
+
+      if (query.length >= 1) {
+        q = q.or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,cuit_cuil.ilike.%${query}%,customer_code.ilike.%${query}%`)
+      } else {
+        q = q.order('first_name', { ascending: true })
+      }
+
+      const { data } = await q.limit(20)
       setCustomers(data || [])
     } finally {
       setIsSearching(false)
@@ -62,10 +66,27 @@ export default function LoanSimulationPage() {
   )
 
   useEffect(() => {
+    performSearch('')
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Si viene con ?customer_id=... (ej. desde el acceso rápido del dashboard)
+  useEffect(() => {
+    const customerId = searchParams.get('customer_id')
+    if (!customerId) return
+    const load = async () => {
+      const { data } = await supabase
+        .from('customers')
+        .select('id, first_name, last_name, cuit_cuil, status, customer_code')
+        .eq('id', customerId)
+        .maybeSingle()
+      if (data) setSelectedCustomer(data)
+    }
+    load()
+  }, [searchParams])
 
   useEffect(() => {
     const loadCreditContext = async () => {
@@ -95,6 +116,7 @@ export default function LoanSimulationPage() {
     try {
       const calc = await calculateLoanPayment(parseFloat(principalAmount), parseInt(termMonths, 10))
       setCalculation(calc)
+      setEditing(false)
     } finally {
       setIsCalculating(false)
     }
@@ -128,7 +150,6 @@ export default function LoanSimulationPage() {
         return
       }
 
-      setSuccess(true)
       navigate(`/prestamos/${data.loan.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear el préstamo')
@@ -137,122 +158,153 @@ export default function LoanSimulationPage() {
     }
   }, [selectedCustomer, calculation, principalAmount, termMonths, purpose, navigate])
 
+  const handleEdit = () => {
+    setEditing(true)
+    setCalculation(null)
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Simulador de Préstamos" description="Calcula y crea nuevos préstamos" backHref="/prestamos" />
 
-      <div className="grid gap-6 md:grid-cols-2">
+      {editing ? (
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>1. Seleccionar Cliente</CardTitle>
+              <CardDescription>Busca el cliente para otorgar el préstamo</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Label className="text-sm mb-2 block">Buscar Cliente</Label>
+                <Search className="absolute left-3 top-[34px] h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Escribe nombre o CUIT del cliente..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-9"
+                />
+                {isSearching && <Spinner className="absolute right-3 top-8 h-4 w-4" />}
+              </div>
+
+              {customers.length > 0 && (
+                <div className="border rounded-lg max-h-72 overflow-y-auto">
+                  {customers.map((customer) => (
+                    <button
+                      key={customer.id}
+                      onClick={() => {
+                        setSelectedCustomer(customer)
+                        setSearchTerm('')
+                        setCustomers([])
+                        setCalculation(null)
+                      }}
+                      className="w-full text-left p-3 hover:bg-muted border-b last:border-b-0 transition-colors"
+                    >
+                      <p className="font-medium">
+                        {customer.first_name} {customer.last_name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {customer.customer_code} • {customer.cuit_cuil}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedCustomer && (
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>
+                      {selectedCustomer.first_name} {selectedCustomer.last_name}
+                    </strong>{' '}
+                    seleccionado
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {selectedCustomer && (
+                <div className="grid gap-3 md:grid-cols-2 text-sm">
+                  <div className="border rounded-lg p-3">
+                    <p className="text-muted-foreground">Disponible</p>
+                    <p className="font-bold text-green-600">
+                      {creditLimit ? `$${creditLimit.available_credit.toLocaleString('es-AR')}` : 'Sin límite'}
+                    </p>
+                  </div>
+                  <div className="border rounded-lg p-3">
+                    <p className="text-muted-foreground">Garantes activos</p>
+                    <p className="font-bold">{activeGuarantors}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>2. Parámetros del Préstamo</CardTitle>
+              <CardDescription>Ingresa el monto y plazo</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FieldGroup>
+                <FieldLabel>Capital Solicitado</FieldLabel>
+                <Input
+                  type="number"
+                  placeholder="100000"
+                  value={principalAmount}
+                  onChange={(e) => setPrincipalAmount(e.target.value)}
+                  disabled={!selectedCustomer}
+                />
+              </FieldGroup>
+
+              <FieldGroup>
+                <FieldLabel>Cuotas (1 a 3)</FieldLabel>
+                <Input
+                  type="number"
+                  placeholder="3"
+                  value={termMonths}
+                  onChange={(e) => setTermMonths(e.target.value)}
+                  disabled={!selectedCustomer}
+                  min="1"
+                  max="3"
+                />
+              </FieldGroup>
+
+              <FieldGroup>
+                <FieldLabel>Propósito (opcional)</FieldLabel>
+                <Input
+                  placeholder="Ej: Compra de electrodomésticos"
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  disabled={!selectedCustomer}
+                />
+              </FieldGroup>
+
+              <Button onClick={handleCalculate} disabled={!selectedCustomer || !principalAmount || !termMonths || isCalculating} className="w-full">
+                {isCalculating ? 'Calculando...' : 'Simular'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
         <Card>
-          <CardHeader>
-            <CardTitle>1. Seleccionar Cliente</CardTitle>
-            <CardDescription>Busca el cliente para otorgar el préstamo</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Label className="text-sm mb-2 block">Buscar Cliente</Label>
-              <Input
-                placeholder="Escribe nombre o CUIT del cliente..."
-                value={searchTerm}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pr-10"
-              />
-              {isSearching && <Spinner className="absolute right-3 top-8 h-4 w-4" />}
+          <CardContent className="flex items-center justify-between pt-6">
+            <div>
+              <p className="font-medium">
+                {selectedCustomer?.first_name} {selectedCustomer?.last_name}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                ${parseFloat(principalAmount).toLocaleString('es-AR')} · {termMonths} cuota(s)
+                {purpose ? ` · ${purpose}` : ''}
+              </p>
             </div>
-
-            {customers.length > 0 && (
-              <div className="border rounded-lg max-h-64 overflow-y-auto">
-                {customers.map((customer) => (
-                  <button
-                    key={customer.id}
-                    onClick={() => {
-                      setSelectedCustomer(customer)
-                      setSearchTerm('')
-                      setCustomers([])
-                      setCalculation(null)
-                    }}
-                    className="w-full text-left p-3 hover:bg-muted border-b last:border-b-0 transition-colors"
-                  >
-                    <p className="font-medium">
-                      {customer.first_name} {customer.last_name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {customer.customer_code} • {customer.cuit_cuil}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {selectedCustomer && (
-              <Alert>
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>
-                    {selectedCustomer.first_name} {selectedCustomer.last_name}
-                  </strong>{' '}
-                  seleccionado
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {selectedCustomer && (
-              <div className="grid gap-3 md:grid-cols-2 text-sm">
-                <div className="border rounded-lg p-3">
-                  <p className="text-muted-foreground">Disponible</p>
-                  <p className="font-bold text-green-600">
-                    {creditLimit ? `$${creditLimit.available_credit.toLocaleString('es-AR')}` : 'Sin límite'}
-                  </p>
-                </div>
-                <div className="border rounded-lg p-3">
-                  <p className="text-muted-foreground">Garantes activos</p>
-                  <p className="font-bold">{activeGuarantors}</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>2. Parámetros del Préstamo</CardTitle>
-            <CardDescription>Ingresa el monto y plazo</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FieldGroup>
-              <FieldLabel>Capital Solicitado</FieldLabel>
-              <Input
-                type="number"
-                placeholder="100000"
-                value={principalAmount}
-                onChange={(e) => setPrincipalAmount(e.target.value)}
-                disabled={!selectedCustomer}
-              />
-            </FieldGroup>
-
-            <FieldGroup>
-              <FieldLabel>Cuotas (1 a 3)</FieldLabel>
-              <Input
-                type="number"
-                placeholder="3"
-                value={termMonths}
-                onChange={(e) => setTermMonths(e.target.value)}
-                disabled={!selectedCustomer}
-                min="1"
-                max="3"
-              />
-            </FieldGroup>
-
-            <FieldGroup>
-              <FieldLabel>Propósito (opcional)</FieldLabel>
-              <Input placeholder="Ej: Compra de electrodomésticos" value={purpose} onChange={(e) => setPurpose(e.target.value)} disabled={!selectedCustomer} />
-            </FieldGroup>
-
-            <Button onClick={handleCalculate} disabled={!selectedCustomer || !principalAmount || !termMonths || isCalculating} className="w-full">
-              {isCalculating ? 'Calculando...' : 'Simular'}
+            <Button variant="outline" size="sm" onClick={handleEdit}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar
             </Button>
           </CardContent>
         </Card>
-      </div>
+      )}
 
       {error && (
         <Alert variant="destructive">

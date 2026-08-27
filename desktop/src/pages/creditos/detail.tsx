@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import { DollarSign, TrendingUp } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { DollarSign, TrendingUp, ShieldAlert } from 'lucide-react'
 import { CreditLimitActions } from './credit-limit-actions'
 import { useAuth } from '@/lib/auth-context'
+import { canManageCreditLimits } from '@/lib/permissions'
 
 const statusColors: Record<string, string> = {
   pending_approval: 'bg-yellow-100 text-yellow-800',
@@ -78,6 +80,18 @@ export default function CreditLimitDetailPage() {
 
   if (!creditLimit) {
     return <div className="p-6 text-muted-foreground">Límite de crédito no encontrado</div>
+  }
+
+  if (profile && !canManageCreditLimits(profile.role as any)) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Límite de Crédito" backHref="/creditos" />
+        <Alert variant="destructive">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription>Esta sección es exclusiva de supervisor y administrador.</AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   const customerName =

@@ -4,6 +4,8 @@ import { StatCard } from '@/components/ui/stat-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CurrencyDisplay } from '@/components/ui/currency-display'
 import { RecentLoansTable, OverdueInstallmentsTable } from './dashboard-tables'
+import { QuickSearch } from './quick-search'
+import Link from 'next/link'
 import { 
   Users, 
   CreditCard, 
@@ -39,11 +41,12 @@ async function getDashboardStats(): Promise<DashboardStats> {
     .select('*', { count: 'exact', head: true })
     .eq('status', 'active')
 
-  // Get pending approvals
+  // Get pending approvals (límites de crédito pendientes -- los préstamos ya
+  // no pasan por un estado "pending", se confirman directo en un paso)
   const { count: pendingApprovals } = await supabase
-    .from('loans')
+    .from('credit_limits')
     .select('*', { count: 'exact', head: true })
-    .eq('status', 'pending')
+    .eq('status', 'pending_approval')
 
   // Get overdue installments
   const { count: overdueInstallments } = await supabase
@@ -90,7 +93,7 @@ async function getRecentLoans(): Promise<Loan[]> {
     .from('loans')
     .select(`
       *,
-      customer:customers(first_name, last_name, customer_code)
+      customer:customer_id(first_name, last_name, customer_code)
     `)
     .order('created_at', { ascending: false })
     .limit(5)
@@ -107,7 +110,7 @@ async function getOverdueInstallments() {
       *,
       loan:loans(
         loan_number,
-        customer:customers(first_name, last_name, phone)
+        customer:customer_id(first_name, last_name, phone)
       )
     `)
     .eq('status', 'overdue')
@@ -127,46 +130,63 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard"
-        description="Resumen general del sistema de financiamiento"
+        title="Inicio"
+        description="Buscá un cliente por CUIT/CUIL para ver su situación al instante"
       />
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard
-          title="Total Clientes"
-          value={stats.totalCustomers}
-          icon={<Users className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Prestamos Activos"
-          value={stats.activeLoans}
-          icon={<CreditCard className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Por Aprobar"
-          value={stats.pendingApprovals}
-          icon={<Clock className="h-5 w-5" />}
-          variant={stats.pendingApprovals > 0 ? 'warning' : 'default'}
-        />
-        <StatCard
-          title="Cuotas Vencidas"
-          value={stats.overdueInstallments}
-          icon={<AlertTriangle className="h-5 w-5" />}
-          variant={stats.overdueInstallments > 0 ? 'destructive' : 'default'}
-        />
-        <StatCard
-          title="Cobranzas Hoy"
-          value={<CurrencyDisplay amount={stats.todayCollections} />}
-          icon={<DollarSign className="h-5 w-5" />}
-          variant="success"
-        />
-        <StatCard
-          title="Cobranzas Mes"
-          value={<CurrencyDisplay amount={stats.monthlyCollections} />}
-          icon={<TrendingUp className="h-5 w-5" />}
-          variant="info"
-        />
+      <QuickSearch />
+
+      {/* Resumen general */}
+      <div>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Resumen general</h2>
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
+          <Link href="/clientes" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Total Clientes"
+              value={stats.totalCustomers}
+              icon={<Users className="h-5 w-5" />}
+            />
+          </Link>
+          <Link href="/prestamos" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Prestamos Activos"
+              value={stats.activeLoans}
+              icon={<CreditCard className="h-5 w-5" />}
+            />
+          </Link>
+          <Link href="/creditos" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Por Aprobar"
+              value={stats.pendingApprovals}
+              icon={<Clock className="h-5 w-5" />}
+              variant={stats.pendingApprovals > 0 ? 'warning' : 'default'}
+            />
+          </Link>
+          <Link href="/alertas" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Cuotas Vencidas"
+              value={stats.overdueInstallments}
+              icon={<AlertTriangle className="h-5 w-5" />}
+              variant={stats.overdueInstallments > 0 ? 'destructive' : 'default'}
+            />
+          </Link>
+          <Link href="/cobranza" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Cobranzas Hoy"
+              value={<CurrencyDisplay amount={stats.todayCollections} />}
+              icon={<DollarSign className="h-5 w-5" />}
+              variant="success"
+            />
+          </Link>
+          <Link href="/cobranza" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Cobranzas Mes"
+              value={<CurrencyDisplay amount={stats.monthlyCollections} />}
+              icon={<TrendingUp className="h-5 w-5" />}
+              variant="info"
+            />
+          </Link>
+        </div>
       </div>
 
       {/* Tables Grid */}

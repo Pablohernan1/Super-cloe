@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { AlertCircle, CheckCircle, Search } from 'lucide-react'
+import { AlertCircle, CheckCircle, Search, HandCoins } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 
 interface Installment {
@@ -35,6 +36,19 @@ interface CustomerInfo {
   status: string
 }
 
+interface LoanRow {
+  loanId: string
+  loanNumber: string
+  loanStatus: string
+  customerId: string
+  customerName: string
+  customerCode: string
+  customerDoc: string
+  balance: number
+  nextDueDate: string | null
+  inMora: boolean
+}
+
 function CobranzaContent() {
   const supabase = createClient()
   const searchParams = useSearchParams()
@@ -42,6 +56,8 @@ function CobranzaContent() {
   const canRehabilitate = ['supervisor', 'administrador'].includes(profile?.role || '')
 
   const [search, setSearch] = useState('')
+  const [loans, setLoans] = useState<LoanRow[]>([])
+  const [loadingLoans, setLoadingLoans] = useState(true)
   const [customer, setCustomer] = useState<CustomerInfo | null>(null)
   const [installments, setInstallments] = useState<Installment[]>([])
   const [selectedInstallmentId, setSelectedInstallmentId] = useState('')
@@ -72,9 +88,60 @@ function CobranzaContent() {
     if (filtered.length > 0) setSelectedInstallmentId(filtered[0].id)
   }, [supabase])
 
-  // Vino desde el detalle de préstamo con ?loan_id=...
+  // Préstamos con saldo pendiente (activos y en mora), para elegir de una
+  // lista en vez de tener que buscar cliente por cliente.
+  const loadLoansList = useCallback(async () => {
+    setLoadingLoans(true)
+    const { data } = await supabase
+      .from('loans')
+      .select(`
+        id, loan_number, status,
+        customer:customer_id ( id, first_name, last_name, customer_code, document_number, status ),
+        installments ( id, due_date, total_amount, paid_amount, penalty_amount, status )
+      `)
+      .in('status', ['active', 'defaulted'])
+      .order('created_at', { ascending: false })
+
+    const rows: LoanRow[] = (data || [])
+      .map((loan: any) => {
+        const pending = (loan.installments || []).filter((i: any) => ['pending', 'partial', 'overdue'].includes(i.status))
+        if (pending.length === 0 || !loan.customer) return null
+        const balance = pending.reduce((sum: number, i: any) => sum + (i.total_amount - i.paid_amount + i.penalty_amount), 0)
+        const nextDueDate = pending.map((i: any) => i.due_date).sort()[0] || null
+        return {
+          loanId: loan.id,
+          loanNumber: loan.loan_number,
+          loanStatus: loan.status,
+          customerId: loan.customer.id,
+          customerName: `${loan.customer.first_name} ${loan.customer.last_name}`,
+          customerCode: loan.customer.customer_code,
+          customerDoc: loan.customer.document_number,
+          balance,
+          nextDueDate,
+          inMora: loan.status === 'defaulted' || loan.customer.status === 'blocked',
+        }
+      })
+      .filter(Boolean) as LoanRow[]
+
+    setLoans(rows)
+    setLoadingLoans(false)
+  }, [supabase])
+
+  useEffect(() => {
+    loadLoansList()
+  }, [loadLoansList])
+
+  // Vino desde el detalle de préstamo (?loan_id=...) o del acceso rápido
+  // del dashboard (?customer_id=...)
   useEffect(() => {
     const loanId = searchParams.get('loan_id')
+    const customerId = searchParams.get('customer_id')
+
+    if (customerId) {
+      loadForCustomer(customerId)
+      return
+    }
+
     if (!loanId) return
 
     const load = async () => {
@@ -84,25 +151,16 @@ function CobranzaContent() {
     load()
   }, [searchParams, loadForCustomer, supabase])
 
-  const handleSearch = async () => {
-    if (!search) return
-    setError(null)
-    const { data } = await supabase
-      .from('customers')
-      .select('id')
-      .or(`document_number.eq.${search},cuit_cuil.eq.${search}`)
-      .limit(1)
-      .maybeSingle()
-
-    if (!data) {
-      setError('No se encontró un cliente con ese CUIT/CUIL')
-      setCustomer(null)
-      setInstallments([])
-      return
-    }
-
-    await loadForCustomer(data.id)
-  }
+  const filteredLoans = loans.filter((l) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return (
+      l.customerName.toLowerCase().includes(q) ||
+      (l.customerCode || '').toLowerCase().includes(q) ||
+      l.customerDoc.includes(search) ||
+      l.loanNumber.toLowerCase().includes(q)
+    )
+  })
 
   const selectedInstallment = installments.find((i) => i.id === selectedInstallmentId)
   const outstandingInstallment = selectedInstallment
@@ -135,6 +193,7 @@ function CobranzaContent() {
       setResult(data)
       setAmount('')
       if (customer) await loadForCustomer(customer.id)
+      loadLoansList()
     } catch (err) {
       setError('Error al registrar el pago')
     } finally {
@@ -159,6 +218,7 @@ function CobranzaContent() {
       }
       setResult({ rehabilitated: true })
       await loadForCustomer(customer.id)
+      loadLoansList()
     } catch (err) {
       setError('Error al rehabilitar la cuenta')
     } finally {
@@ -170,25 +230,71 @@ function CobranzaContent() {
     <div className="space-y-6">
       <PageHeader title="Cobranza / rehabilitación" description="Registrar pago y normalizar cuentas en mora" />
 
-      {!searchParams.get('loan_id') && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Buscar cliente</CardTitle>
-            <CardDescription>Por CUIT/CUIL</CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-2">
-            <Input
-              placeholder="20-12345678-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button onClick={handleSearch}>
-              <Search className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Préstamos con saldo pendiente</CardTitle>
+          <CardDescription>Activos y en mora. Filtrá por nombre, código, documento o número de préstamo.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Filtrar..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          </div>
+
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Préstamo</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Saldo</TableHead>
+                  <TableHead>Próx. Vencimiento</TableHead>
+                  <TableHead className="text-right">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingLoans ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Cargando...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredLoans.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No hay préstamos con saldo pendiente
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredLoans.map((l) => (
+                    <TableRow key={l.loanId} className={customer?.id === l.customerId ? 'bg-muted/50' : ''}>
+                      <TableCell>
+                        <p className="font-medium">{l.customerName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {l.customerCode} · {l.customerDoc}
+                        </p>
+                      </TableCell>
+                      <TableCell>{l.loanNumber}</TableCell>
+                      <TableCell>
+                        {l.inMora ? <Badge variant="destructive">Mora</Badge> : <Badge className="bg-green-100 text-green-800">Activo</Badge>}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">${l.balance.toLocaleString('es-AR')}</TableCell>
+                      <TableCell>{l.nextDueDate ? new Date(l.nextDueDate).toLocaleDateString('es-AR') : '-'}</TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="outline" onClick={() => loadForCustomer(l.customerId)}>
+                          <HandCoins className="mr-2 h-4 w-4" />
+                          Cobrar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {error && (
         <Alert variant="destructive">

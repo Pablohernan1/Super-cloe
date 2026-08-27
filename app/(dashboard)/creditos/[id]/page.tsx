@@ -4,9 +4,10 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Edit, DollarSign, Users, Calendar, User, FileText, TrendingUp } from 'lucide-react'
+import { Edit, DollarSign, Users, Calendar, User, FileText, TrendingUp, ShieldAlert } from 'lucide-react'
 import Link from 'next/link'
 import { CreditLimitActions } from './credit-limit-actions'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface CreditLimitDetailPageProps {
   params: Promise<{ id: string }>
@@ -43,6 +44,18 @@ export default async function CreditLimitDetailPage({ params }: CreditLimitDetai
       .eq('id', authUser.id)
       .single()
     userProfile = data
+  }
+
+  if (userProfile && !['supervisor', 'administrador'].includes(userProfile.role)) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Límite de Crédito" backHref="/creditos" />
+        <Alert variant="destructive">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription>Esta sección es exclusiva de supervisor y administrador.</AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   // Fetch credit limit with customer and audit history

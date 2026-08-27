@@ -24,6 +24,8 @@ import PrestamoSimulacionPage from '@/pages/prestamos/simulacion'
 
 import CobranzaPage from '@/pages/cobranza'
 import AlertasPage from '@/pages/alertas'
+import TarjetasPage from '@/pages/tarjetas'
+import ParametrosPage from '@/pages/parametros'
 
 export default function App() {
   return (
@@ -53,6 +55,8 @@ export default function App() {
 
             <Route path="/cobranza" element={<CobranzaPage />} />
             <Route path="/alertas" element={<AlertasPage />} />
+            <Route path="/tarjetas" element={<TarjetasPage />} />
+            <Route path="/parametros" element={<ParametrosPage />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

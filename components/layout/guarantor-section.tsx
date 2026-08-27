@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { AlertCircle, Users } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import Link from 'next/link'
 
 interface GuarantorSectionProps {
   customerId: string
@@ -83,9 +84,13 @@ export async function GuarantorSection({ customerId, isGuarantor }: GuarantorSec
             ) : (
               <div className="space-y-3">
                 {guarantorsOf.map((relation) => (
-                  <div key={relation.id} className="flex items-center justify-between p-3 border rounded">
+                  <Link
+                    key={relation.id}
+                    href={`/clientes/${relation.guarantor?.id}`}
+                    className="flex items-center justify-between p-3 border rounded hover:bg-muted transition-colors"
+                  >
                     <div>
-                      <p className="font-medium text-sm">
+                      <p className="font-medium text-sm hover:underline">
                         {relation.guarantor?.first_name} {relation.guarantor?.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">
@@ -101,7 +106,7 @@ export async function GuarantorSection({ customerId, isGuarantor }: GuarantorSec
                     >
                       {relation.guarantor?.status === 'active' ? 'Activo' : 'No Activo'}
                     </Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -125,9 +130,13 @@ export async function GuarantorSection({ customerId, isGuarantor }: GuarantorSec
             ) : (
               <div className="space-y-3">
                 {guaranteesFor.map((relation) => (
-                  <div key={relation.id} className="flex items-center justify-between p-3 border rounded">
+                  <Link
+                    key={relation.id}
+                    href={`/clientes/${relation.titular?.id}`}
+                    className="flex items-center justify-between p-3 border rounded hover:bg-muted transition-colors"
+                  >
                     <div>
-                      <p className="font-medium text-sm">
+                      <p className="font-medium text-sm hover:underline">
                         {relation.titular?.first_name} {relation.titular?.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">
@@ -137,7 +146,7 @@ export async function GuarantorSection({ customerId, isGuarantor }: GuarantorSec
                     <Badge className="bg-blue-100 text-blue-800">
                       {relation.titular?.status === 'active' ? 'Activo' : 'No Activo'}
                     </Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

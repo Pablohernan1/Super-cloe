@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { CurrencyDisplay } from '@/components/ui/currency-display'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { GuarantorSection } from '@/components/layout/guarantor-section'
+import { CustomerPortalCard } from '@/components/layout/customer-portal-card'
 import Link from 'next/link'
 import { Edit, User, Building2, Phone, Mail, MapPin, Briefcase, CreditCard, FileText, Calendar } from 'lucide-react'
 
@@ -46,7 +47,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
         guarantors_active_count,
         eligible_for_extension
       ),
-      loans (
+      loans!loans_customer_id_fkey (
         id,
         loan_number,
         principal_amount,
@@ -487,6 +488,8 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
       )}
 
       {/* Garantes Section */}
+      <CustomerPortalCard customerName={getDisplayName()} customerCode={customer.customer_code} portalToken={customer.portal_token} />
+
       <GuarantorSection customerId={id} isGuarantor={true} />
     </div>
   )

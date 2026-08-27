@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAuditLog } from '@/lib/audit-logger'
-import { canApprove, canCreate } from '@/lib/permissions'
+import { canApprove, canManageCreditLimits } from '@/lib/permissions'
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       .eq('id', user.id)
       .single()
 
-    if (!canCreate(userProfile?.role)) {
+    if (!canManageCreditLimits(userProfile?.role)) {
       return Response.json({ error: 'Forbidden' }, { status: 403 })
     }
 

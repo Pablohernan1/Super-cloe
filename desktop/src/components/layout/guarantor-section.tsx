@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -78,9 +79,13 @@ export function GuarantorSection({ customerId, isGuarantor }: GuarantorSectionPr
             ) : (
               <div className="space-y-3">
                 {guarantorsOf.map((relation) => (
-                  <div key={relation.id} className="flex items-center justify-between p-3 border rounded">
+                  <Link
+                    key={relation.id}
+                    to={`/clientes/${relation.guarantor?.id}`}
+                    className="flex items-center justify-between p-3 border rounded hover:bg-muted transition-colors"
+                  >
                     <div>
-                      <p className="font-medium text-sm">
+                      <p className="font-medium text-sm hover:underline">
                         {relation.guarantor?.first_name} {relation.guarantor?.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">{relation.guarantor?.cuit_cuil}</p>
@@ -88,7 +93,7 @@ export function GuarantorSection({ customerId, isGuarantor }: GuarantorSectionPr
                     <Badge className={relation.guarantor?.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
                       {relation.guarantor?.status === 'active' ? 'Activo' : 'No Activo'}
                     </Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -109,9 +114,13 @@ export function GuarantorSection({ customerId, isGuarantor }: GuarantorSectionPr
             ) : (
               <div className="space-y-3">
                 {guaranteesFor.map((relation) => (
-                  <div key={relation.id} className="flex items-center justify-between p-3 border rounded">
+                  <Link
+                    key={relation.id}
+                    to={`/clientes/${relation.titular?.id}`}
+                    className="flex items-center justify-between p-3 border rounded hover:bg-muted transition-colors"
+                  >
                     <div>
-                      <p className="font-medium text-sm">
+                      <p className="font-medium text-sm hover:underline">
                         {relation.titular?.first_name} {relation.titular?.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">{relation.titular?.cuit_cuil}</p>
@@ -119,7 +128,7 @@ export function GuarantorSection({ customerId, isGuarantor }: GuarantorSectionPr
                     <Badge className="bg-blue-100 text-blue-800">
                       {relation.titular?.status === 'active' ? 'Activo' : 'No Activo'}
                     </Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

@@ -168,9 +168,11 @@ export default function LoanDetailPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             {loan.loan_guarantors.map((lg: any) => (
-              <Badge key={lg.guarantor.id} variant="secondary">
-                {lg.guarantor.first_name} {lg.guarantor.last_name} ({lg.guarantor.customer_code})
-              </Badge>
+              <Link key={lg.guarantor.id} to={`/clientes/${lg.guarantor.id}`}>
+                <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/70">
+                  {lg.guarantor.first_name} {lg.guarantor.last_name} ({lg.guarantor.customer_code})
+                </Badge>
+              </Link>
             ))}
           </CardContent>
         </Card>

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatCard } from '@/components/ui/stat-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CurrencyDisplay } from '@/components/ui/currency-display'
 import { RecentLoansTable, OverdueInstallmentsTable } from './dashboard-tables'
+import { QuickSearch } from './quick-search'
 import { Users, CreditCard, DollarSign, AlertTriangle, Clock, TrendingUp } from 'lucide-react'
 
 interface DashboardStats {
@@ -39,7 +41,7 @@ export default function DashboardPage() {
       ] = await Promise.all([
         supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('credit_limits').select('*', { count: 'exact', head: true }).eq('status', 'pending_approval'),
         supabase.from('installments').select('*', { count: 'exact', head: true }).eq('status', 'overdue'),
       ])
 
@@ -60,13 +62,13 @@ export default function DashboardPage() {
 
       const { data: loans } = await supabase
         .from('loans')
-        .select('*, customer:customers(first_name, last_name, customer_code)')
+        .select('*, customer:customer_id(first_name, last_name, customer_code)')
         .order('created_at', { ascending: false })
         .limit(5)
 
       const { data: overdue } = await supabase
         .from('installments')
-        .select('*, loan:loans(loan_number, customer:customers(first_name, last_name, phone))')
+        .select('*, loan:loans(loan_number, customer:customer_id(first_name, last_name, phone))')
         .eq('status', 'overdue')
         .order('due_date', { ascending: true })
         .limit(5)
@@ -93,35 +95,52 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" description="Resumen general del sistema de financiamiento" />
+      <PageHeader title="Inicio" description="Buscá un cliente por CUIT/CUIL para ver su situación al instante" />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard title="Total Clientes" value={stats.totalCustomers} icon={<Users className="h-5 w-5" />} />
-        <StatCard title="Prestamos Activos" value={stats.activeLoans} icon={<CreditCard className="h-5 w-5" />} />
-        <StatCard
-          title="Por Aprobar"
-          value={stats.pendingApprovals}
-          icon={<Clock className="h-5 w-5" />}
-          variant={stats.pendingApprovals > 0 ? 'warning' : 'default'}
-        />
-        <StatCard
-          title="Cuotas Vencidas"
-          value={stats.overdueInstallments}
-          icon={<AlertTriangle className="h-5 w-5" />}
-          variant={stats.overdueInstallments > 0 ? 'destructive' : 'default'}
-        />
-        <StatCard
-          title="Cobranzas Hoy"
-          value={<CurrencyDisplay amount={stats.todayCollections} />}
-          icon={<DollarSign className="h-5 w-5" />}
-          variant="success"
-        />
-        <StatCard
-          title="Cobranzas Mes"
-          value={<CurrencyDisplay amount={stats.monthlyCollections} />}
-          icon={<TrendingUp className="h-5 w-5" />}
-          variant="info"
-        />
+      <QuickSearch />
+
+      <div>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Resumen general</h2>
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
+          <Link to="/clientes" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard title="Total Clientes" value={stats.totalCustomers} icon={<Users className="h-5 w-5" />} />
+          </Link>
+          <Link to="/prestamos" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard title="Prestamos Activos" value={stats.activeLoans} icon={<CreditCard className="h-5 w-5" />} />
+          </Link>
+          <Link to="/creditos" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Por Aprobar"
+              value={stats.pendingApprovals}
+              icon={<Clock className="h-5 w-5" />}
+              variant={stats.pendingApprovals > 0 ? 'warning' : 'default'}
+            />
+          </Link>
+          <Link to="/alertas" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Cuotas Vencidas"
+              value={stats.overdueInstallments}
+              icon={<AlertTriangle className="h-5 w-5" />}
+              variant={stats.overdueInstallments > 0 ? 'destructive' : 'default'}
+            />
+          </Link>
+          <Link to="/cobranza" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Cobranzas Hoy"
+              value={<CurrencyDisplay amount={stats.todayCollections} />}
+              icon={<DollarSign className="h-5 w-5" />}
+              variant="success"
+            />
+          </Link>
+          <Link to="/cobranza" className="block transition-transform hover:-translate-y-0.5">
+            <StatCard
+              title="Cobranzas Mes"
+              value={<CurrencyDisplay amount={stats.monthlyCollections} />}
+              icon={<TrendingUp className="h-5 w-5" />}
+              variant="info"
+            />
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

@@ -39,19 +39,22 @@ export function Topbar() {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-4 border-b bg-card px-4 lg:px-6">
+    <header className="flex h-16 shrink-0 items-center gap-4 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground lg:px-6">
       <div className="flex-1" />
 
       <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 pl-2 pr-3">
+            <Button
+              variant="ghost"
+              className="gap-2 pl-2 pr-3 text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            >
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium uppercase text-primary-foreground">
                 {profile?.full_name?.charAt(0) || 'U'}
               </div>
               <div className="hidden flex-col items-start text-left md:flex">
                 <span className="text-sm font-medium">{profile?.full_name || 'Usuario'}</span>
-                <span className="text-xs capitalize text-muted-foreground">{profile?.role || 'Sin rol'}</span>
+                <span className="text-xs capitalize text-sidebar-foreground/70">{profile?.role || 'Sin rol'}</span>
               </div>
             </Button>
           </DropdownMenuTrigger>

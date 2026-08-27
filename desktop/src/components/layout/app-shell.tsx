@@ -1,24 +1,31 @@
 import { Topbar } from './topbar'
 import { cn } from '@/lib/utils'
 import { NavLink } from 'react-router-dom'
-import { Home, Users, FileText, CreditCard, HandCoins, Bell } from 'lucide-react'
+import { Home, Users, FileText, CreditCard, HandCoins, Bell, QrCode, Settings } from 'lucide-react'
+import { useAuth } from '@/lib/auth-context'
 
 interface AppShellProps {
   children: React.ReactNode
 }
 
-// Alineado con la navegación del spec (sección 6).
+// Alineado con la navegación del spec (sección 6). Créditos queda solo
+// para supervisor+ (spec 4: aprobar límites es tarea de supervisor).
 const navItems = [
   { title: 'Inicio', href: '/dashboard', icon: Home },
   { title: 'Clientes', href: '/clientes', icon: Users },
-  { title: 'Créditos', href: '/creditos', icon: CreditCard },
+  { title: 'Créditos', href: '/creditos', icon: CreditCard, roles: ['supervisor', 'administrador'] },
   { title: 'Garantes', href: '/garantes', icon: Users },
   { title: 'Préstamos', href: '/prestamos', icon: FileText },
   { title: 'Cobranza', href: '/cobranza', icon: HandCoins },
   { title: 'Alertas', href: '/alertas', icon: Bell },
+  { title: 'Tarjetas', href: '/tarjetas', icon: QrCode, roles: ['supervisor', 'administrador'] },
+  { title: 'Parámetros', href: '/parametros', icon: Settings, roles: ['administrador'] },
 ]
 
 function FixedSidebar() {
+  const { profile } = useAuth()
+  const visibleItems = navItems.filter((item) => !item.roles || item.roles.includes(profile?.role || ''))
+
   return (
     <aside className="w-64 bg-sidebar border-r border-border flex flex-col">
       <div className="h-16 flex items-center justify-center border-b border-border">
@@ -26,7 +33,7 @@ function FixedSidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-2">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon
           return (
             <NavLink
