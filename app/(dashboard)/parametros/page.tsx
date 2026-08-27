@@ -63,7 +63,6 @@ function ParameterRow({
     <div className="grid gap-2 sm:grid-cols-[1fr_200px_auto] sm:items-end border-b pb-4 last:border-0 last:pb-0">
       <div>
         <Label className="text-sm font-medium">{param.description || param.key}</Label>
-        <p className="text-xs text-muted-foreground font-mono">{param.key}</p>
       </div>
       <Input
         type={param.data_type === 'number' ? 'number' : 'text'}
