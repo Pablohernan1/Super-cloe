@@ -55,6 +55,19 @@ function sendUpdateStatus(status, payload) {
   mainWindow?.webContents.send('update-status', { status, ...payload })
 }
 
+// electron-updater tira sus mensajes en inglés y crudos (detalle interno de
+// la librería) -- se traducen los casos esperables a algo que un
+// administrador sin conocimientos técnicos entienda.
+function friendlyUpdateError(rawMessage) {
+  if (/no published versions/i.test(rawMessage)) {
+    return 'Todavía no hay ninguna versión publicada para descargar.'
+  }
+  if (/net::|ENOTFOUND|ETIMEDOUT|getaddrinfo/i.test(rawMessage)) {
+    return 'No se pudo conectar a internet para buscar la actualización.'
+  }
+  return 'No se pudo buscar la actualización. Volvé a intentar más tarde.'
+}
+
 autoUpdater.autoDownload = true
 autoUpdater.autoInstallOnAppQuit = false
 
@@ -62,7 +75,7 @@ autoUpdater.on('update-available', (info) => sendUpdateStatus('available', { ver
 autoUpdater.on('update-not-available', () => sendUpdateStatus('not-available'))
 autoUpdater.on('download-progress', (progress) => sendUpdateStatus('downloading', { percent: progress.percent }))
 autoUpdater.on('update-downloaded', () => sendUpdateStatus('downloaded'))
-autoUpdater.on('error', (err) => sendUpdateStatus('error', { message: err?.message || String(err) }))
+autoUpdater.on('error', (err) => sendUpdateStatus('error', { message: friendlyUpdateError(err?.message || String(err)) }))
 
 ipcMain.handle('check-for-update', async () => {
   if (!app.isPackaged) {
@@ -72,8 +85,9 @@ ipcMain.handle('check-for-update', async () => {
   sendUpdateStatus('checking')
   try {
     await autoUpdater.checkForUpdates()
-  } catch (err) {
-    sendUpdateStatus('error', { message: err?.message || String(err) })
+  } catch {
+    // Ya se reportó vía el evento 'error' de autoUpdater -- si mandamos otro
+    // acá también, el cartel aparece duplicado en pantalla.
   }
 })
 
