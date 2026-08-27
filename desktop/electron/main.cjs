@@ -11,6 +11,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     title: 'Cloe - Financiación propia',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
