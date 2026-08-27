@@ -42,6 +42,13 @@ const GROUPS: { title: string; keys: string[] }[] = [
   },
 ]
 
+// Las descripciones en la base incluyen referencias internas tipo "(spec 9)"
+// para rastrear contra el PDF -- no le sirven a un administrador, se ocultan
+// solo en pantalla sin tocar el dato guardado.
+function displayDescription(param: Parameter) {
+  return (param.description || param.key).replace(/\s*\(spec[^)]*\)\s*$/i, '')
+}
+
 function ParameterRow({
   param,
   value,
@@ -60,7 +67,7 @@ function ParameterRow({
   return (
     <div className="grid gap-2 sm:grid-cols-[1fr_200px_auto] sm:items-end border-b pb-4 last:border-0 last:pb-0">
       <div>
-        <Label className="text-sm font-medium">{param.description || param.key}</Label>
+        <Label className="text-sm font-medium">{displayDescription(param)}</Label>
       </div>
       <Input
         type={param.data_type === 'number' ? 'number' : 'text'}
